@@ -183,38 +183,56 @@ Composition compose(const Config& cfg) {
     for(int i=0;i<cfg.bars;++i) {
         out.bars.push_back((cfg.style==Style::MinimalBody||i%2==0)?a:b);
     }
-    // Structural transformations are selected by role and form. Variation is not a
-    // percentage likelihood of randomly changing individual notes.
+    // Explicit musical intensity bands. Positive variation must not collapse to
+    // a single on/off edit for almost the entire [0,100] range.
+    // 0: exact motifs; 1..24: subtle response; 25..49: rhythmic contrast;
+    // 50..74: strong phrase development; 75..100: additional creative edit.
+    // Source motif bars (first bar or first two bars) are never mutated.
     if(cfg.variation>0) {
+        // The first gentle change occurs in bar 4, not in the original A/B cell.
         if(cfg.style==Style::MinimalBody) {
-            omit(out,3,3);
-            if(cfg.bars==8) {
-                // second anchor is 8 or 12; the preceding slot is always intentionally free.
-                anticipate(out,7,4);
-            }
+            const int old=byId(out.bars[3],5).interval;
+            answer(out,3,5,old==3?7:3);
         } else if(cfg.style==Style::ClassicEBM) {
-            omit(out,3,106);
-            if(cfg.bars==8) anticipate(out,6,6);
+            const int old=byId(out.bars[3],107).interval;
+            answer(out,3,107,old==7?12:7);
         } else {
-            // Answer maintains the shared rhythm but changes a designated pitch role.
-            const int selected=byId(out.bars[3],102).interval;
-            answer(out,3,102,selected==7?10:7);
-            if(cfg.bars==8){
-                const int old=byId(out.bars[7],104).interval;
-                answer(out,7,104,old==3?5:3);
-            }
+            const int old=byId(out.bars[3],102).interval;
+            answer(out,3,102,old==7?10:7);
         }
-        // Intensity 60+ allows additional meaningful answer contour transformation.
-        if(cfg.variation>=60&&cfg.bars==8) {
-            if(cfg.style==Style::ClassicEBM) {
-                const int old=byId(out.bars[5],107).interval;
-                answer(out,5,107,old==7?12:7);
-            } else if(cfg.style==Style::MinimalBody) {
-                const int old=byId(out.bars[5],5).interval;
-                answer(out,5,5,old==3?7:3);
+    }
+    if(cfg.variation>=25) {
+        // More space rather than randomly raising the number of notes.
+        if(cfg.style==Style::MinimalBody) omit(out,3,3);
+        else if(cfg.style==Style::ClassicEBM) omit(out,3,106);
+        else {
+            const int old=byId(out.bars[cfg.bars==8?5:3],104).interval;
+            answer(out,cfg.bars==8?5:3,104,old==3?5:3);
+        }
+    }
+    if(cfg.variation>=50) {
+        if(cfg.style==Style::MinimalBody) anticipate(out,cfg.bars==8?7:3,4);
+        else if(cfg.style==Style::ClassicEBM) anticipate(out,cfg.bars==8?6:2,6);
+        else omit(out,cfg.bars==8?5:3,103);
+    }
+    if(cfg.variation>=75) {
+        if(cfg.style==Style::MinimalBody) {
+            if(cfg.bars==8) omit(out,7,2);
+            else { const int old=byId(out.bars[2],5).interval;
+                   answer(out,2,5,old==3?7:3); }
+        } else if(cfg.style==Style::ClassicEBM) {
+            const int bar=cfg.bars==8?5:3;
+            const int old=byId(out.bars[bar],102).interval;
+            answer(out,bar,102,old==3?5:3);
+        } else {
+            if(cfg.bars==8) {
+                const int old=byId(out.bars[7],102).interval;
+                answer(out,7,102,old==7?10:7);
             } else {
-                const int old=byId(out.bars[5],102).interval;
-                answer(out,5,102,old==7?10:7);
+                // Already altered B in bar 4; modify its contour without
+                // adding notes or compromising the original first two bars.
+                const int old=byId(out.bars[3],104).interval;
+                answer(out,3,104,old==5?7:5);
             }
         }
     }

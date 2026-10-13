@@ -1,4 +1,5 @@
 #include "ebm/Composer.hpp"
+#include "ebm/Novelty.hpp"
 #include "ebm/MidiWriter.hpp"
 #include <algorithm>
 #include <cstdint>
@@ -17,10 +18,11 @@ int main() {
     using namespace ebm;
     using namespace ebm::v2;
     std::set<std::vector<std::uint8_t>> sampleHashes;
+    int comparedIntensityCases=0;
     for(int s=0;s<3;++s) {
         for(int n=0;n<100;++n) {
             for(int bars : {4,8}) {
-                for(int intensity : {0,30,75,100}) {
+                for(int intensity : {0,15,30,55,85}) {
                     Config cfg;cfg.style=static_cast<Style>(s);cfg.seed=uint64_t(314159+s*1019+n);
                     cfg.bars=bars;cfg.variation=intensity;
                     const auto composed=compose(cfg), repeated=compose(cfg);
@@ -44,7 +46,7 @@ int main() {
                     const auto midi=toMidi(phrase);
                     REQUIRE(std::string(midi.begin(),midi.begin()+4)=="MThd");
                     REQUIRE(std::string(midi.begin()+14,midi.begin()+18)=="MTrk");
-                    if(n<30 && bars==8 && intensity==75)
+                    if(n<30 && bars==8 && intensity==85)
                         (void)sampleHashes.insert(midi);
                     cfg.rootMidi=43;
                     const auto transposed=compose(cfg);
@@ -58,6 +60,10 @@ int main() {
                     }
                     cfg.rootMidi=36;
                     REQUIRE(render(compose(cfg)).notes==phrase.notes); // C -> G -> C restore
+                    if(intensity>0) {
+                        const int expectedEdits=(intensity<25?1:(intensity<50?2:(intensity<75?3:4)));
+                        REQUIRE(static_cast<int>(composed.edits.size())==expectedEdits);
+                    }
                     if(intensity==0) {
                         REQUIRE(composed.edits.empty());
                         const int motifBars=s==0?1:2;
@@ -67,25 +73,12 @@ int main() {
                     } else {
                         REQUIRE(!composed.edits.empty());
                         REQUIRE(composed.bars[0].notes==repeated.bars[0].notes);
-                        if(s==0) {
-                            REQUIRE(composed.bars[3].notes.size()+1==composed.bars[0].notes.size());
-                            if(bars==8) {
-                                REQUIRE(std::any_of(composed.edits.begin(),composed.edits.end(),
-                                  [](const Edit& e){return e.operation==Operation::Anticipate && e.bar==7;}));
-                            }
-                        }
-                        if(s==1) {
-                            REQUIRE(composed.bars[3].notes.size()+1==composed.bars[1].notes.size());
-                            if(bars==8) {
-                                REQUIRE(std::any_of(composed.edits.begin(),composed.edits.end(),
-                                  [](const Edit& e){return e.operation==Operation::Anticipate && e.bar==6;}));
-                            }
-                        }
-                        if(s==2) {
-                            REQUIRE(composed.bars[3].notes.size()==composed.bars[1].notes.size());
-                            REQUIRE(composed.bars[3].notes!=composed.bars[1].notes);
-                            for(std::size_t k=0;k<composed.bars[1].notes.size();++k)
-                                REQUIRE(composed.bars[3].notes[k].step==composed.bars[1].notes[k].step);
+                        const int sourceMotifBars=s==0?1:2;
+                        for(int j=0;j<sourceMotifBars;++j) {
+                            Config unvaried=cfg;unvaried.variation=0;
+                            const auto baseline=compose(unvaried);
+                            REQUIRE(composed.bars[static_cast<std::size_t>(j)].notes==
+                                    baseline.bars[static_cast<std::size_t>(j)].notes);
                         }
                     }
                     for(const auto& edit:composed.edits) {
@@ -99,6 +92,74 @@ int main() {
                 }
             }
         }
+    }
+    for(int s=0;s<3;++s)for(int n=0;n<100;++n)for(int bars:{4,8}) {
+        Config cfg;cfg.style=static_cast<Style>(s);cfg.seed=uint64_t(314159+s*1019+n);
+        cfg.bars=bars;
+        std::vector<Phrase> levels;
+        for(int v:{0,15,30,55,85}) { cfg.variation=v; levels.push_back(render(compose(cfg))); }
+        for(std::size_t j=1;j<levels.size();++j) {
+            REQUIRE(levels[j].notes!=levels[j-1].notes);
+            ++comparedIntensityCases;
+        }
+    }
+    REQUIRE(comparedIntensityCases==2400);
+    // The future GENERATE action must compare musical structures, not MIDI bytes.
+    // Same notes transposed are not a different motif; different contours are.
+    for(int s=0;s<3;++s){
+        Config cfg;cfg.style=static_cast<Style>(s);cfg.variation=50;
+        std::vector<Composition> recent;
+        int approved=0;
+        for(int i=1;i<=100;++i){
+            cfg.seed=static_cast<std::uint64_t>(i*1237);
+            const auto chosen=composeNovel(cfg,recent);
+            const auto replay=composeNovel(cfg,recent);
+            REQUIRE(render(chosen.composition).notes==render(replay.composition).notes);
+            REQUIRE(chosen.meetsTarget==replay.meetsTarget);
+            REQUIRE(chosen.candidatesEvaluated>=1&&chosen.candidatesEvaluated<=16);
+            if(chosen.meetsTarget){
+                REQUIRE(recent.empty()||chosen.minimumDistance>=4);
+                ++approved;
+            }
+            if(!recent.empty()){
+                REQUIRE(chosen.minimumDistance>=0);
+                int naiveMinimum=1000000;
+                const std::size_t start=recent.size()>8?recent.size()-8:0;
+                for(std::size_t h=start;h<recent.size();++h)
+                    naiveMinimum=std::min(naiveMinimum,motifDistance(compose(cfg),recent[h]));
+                REQUIRE(chosen.minimumDistance>=naiveMinimum);
+            }
+            recent.push_back(chosen.composition);
+        }
+        REQUIRE(approved>=98); // Empirical gate on known fixed-seed 100-example fixture.
+        if(s==0){
+            Config variant=cfg;variant.rootMidi=43;
+            REQUIRE(motifDistance(compose(cfg),compose(variant))==0);
+        }
+    }
+    // Intensity affects a later arrangement but does not rewrite source motif.
+    // The structural measure intentionally ignores velocity and transposition.
+    {
+        Config a;a.style=Style::MinimalBody;a.seed=1234;a.variation=0;
+        const auto p=compose(a);
+        a.variation=85;
+        const auto altered=compose(a);
+        REQUIRE(motifDistance(p,altered)==0);
+        a.rootMidi=43;
+        REQUIRE(motifDistance(p,compose(a))==0);
+        // Older same-style phrases remain in the window when other styles are
+        // interleaved, even if the immediate last eight items do not match.
+        std::vector<Composition> interleaved{p};
+        for(int j=0;j<20;++j){
+            Config c;c.style=Style::ClassicEBM;c.seed=static_cast<unsigned>(j+500);
+            interleaved.push_back(compose(c));
+        }
+        Config again;again.style=Style::MinimalBody;again.seed=1234;
+        const auto selected=composeNovel(again,interleaved);
+        REQUIRE(selected.minimumDistance>=4);
+        REQUIRE(selected.candidatesEvaluated>=2);
+        REQUIRE(selected.meetsTarget);
+        REQUIRE(motifDistance(selected.composition,p)==selected.minimumDistance);
     }
     // Unique MIDI content is a diagnostic over seeds, not guaranteed by a finite grammar.
     // Reject style-collapse: the deliberately varied 90-sample corpus must contain at least 85 distinct phrases.
@@ -132,7 +193,7 @@ int main() {
     cfg.variation=30;cfg.style=static_cast<Style>(99);
     REQUIRE(rejects([&]{(void)compose(cfg);}));
     REQUIRE(rejects([&]{(void)toMidi(Phrase{4,{{0,36,100,3},{2,36,100,1}}});}));
-    std::cout<<"PASS: 2400 compositions (3 styles x100 seeds x2 lengths x4 variation levels),"
-                " musical role/resolution invariants, real transforms, >=85/90 distinctive preview seeds, transpose/return, MIDI headers, negative tests\n";
+    std::cout<<"PASS: 3000 compositions (3 styles x100 seeds x2 lengths x5 variation levels),"
+                " 2400 adjacent intensity checks, musical role/resolution invariants, real transforms, >=85/90 distinctive preview seeds, transpose/return, MIDI headers, negative tests\n";
     return 0;
 }

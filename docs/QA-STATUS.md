@@ -1,22 +1,20 @@
-# 125A EBM musical engine v0.2.0 QA, 2026-10-13
+# 125A EBM musical engine v0.2 quality correction — 2026-10-13
 
-**Status: technical local tests PASS, musical listening gate OPEN; NOT FINAL.**
+**Status: local technical checks PASS; musical quality still NOT VERIFIED; NOT FINAL.**
 
-| Gate | Recorded result |
+See [quality audit](QUALITY-AUDIT-2026-10-13.md) for measures, context and counterexamples.
+
+| Gate | Latest result |
 |---|---|
-| GCC/Linux C++17 -Wall -Wextra -Wpedantic -Werror Release | PASS, 3 library sources + 2 executables |
-| CTest musical-contract suite | PASS 1/1; 2,400 compositions = 3 styles × 100 seeds × 4 intensities × 4/8 bars |
-| Sanitized Debug CTest (-fsanitize=address,undefined) | PASS 1/1, no recorded sanitizer errors |
-| Independent MIDI verification | PASS 3 files using third-party mido parser: 8 bars/120 BPM, matched NoteOn/Off, 1-voice max |
-| Preview event counts | MINIMAL 47, CLASSIC 67, DARK 48; one independently rendered MIDI preview per style |
-| Distinctness diagnostic | At least 85 unique MIDI files in 90 seed test items; stochastic duplicates are still possible |
-| Adversarial contract tests | Invalid roots/bars/styles/variation, deliberate overlap, missing chromatic target, missing kick, bad motif start, invalid note-off overlap rejected |
-| Root identity | PASS C2→G2→C2, rhythm/gate/velocity preserved |
-| Musical quality/style authenticity | **NOT VERIFIED**: no human listening/rating accepted |
-| Windows native build, Studio One / VST3 | **NOT TESTED / NOT IMPLEMENTED** |
-| Steinberg Validator / 125A Tester | **NOT APPLICABLE YET** |
-| GitHub Actions | **NOT RUN**; save budget |
+| C++17 GCC Linux Release build (warnings as errors) | PASS locally |
+| Release CTest with unconditional REQUIRE | PASS 1/1; 3,000 fixed-seed compositions, 2,400 adjacent intensity comparisons, adversarial cases |
+| ASan/UBSan Debug CTest | PASS 1/1 |
+| Novelty-session audit, fixed 100 seeds/style | 300/300 accepted at declared **structural** distance 4; not an artistic success measure |
+| Independent MIDI parse (`mido`) | PASS 3/3 example files: valid NoteOn/Off, 8 bars, 120 BPM |
+| Human listening and style authenticity | **NOT VERIFIED** |
+| Native Windows build and DAW/VST3 | **NOT IMPLEMENTED / NOT VERIFIED** |
+| Steinberg Validator / 125A Tester | NOT APPLICABLE to current standalone engine |
+| GitHub Actions | NOT RUN; preserving limited CI budget |
+| Release | NOT READY |
 
-## Interpretation
-
-The deterministic contract test does **not** establish that generated basslines are objectively compelling. It establishes a repeatable role/phrase/gate structure, meaningful transformations, and MIDI correctness. The nearest meaningful milestone is controlled sonic A/B against the v0.1 baseline, with curated examples rather than 90 user-listening tasks. No release/GUI claim is permitted on these test results.
+No third-party artist transcriptions or commercial MIDI data are included.
