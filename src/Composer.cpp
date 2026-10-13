@@ -1,6 +1,7 @@
 #include "ebm/Composer.hpp"
 #include <algorithm>
 #include <initializer_list>
+#include <array>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
@@ -13,7 +14,7 @@ bool Event::operator==(const Event& o) const {
            targetId == o.targetId && targetBarDelta == o.targetBarDelta;
 }
 bool Bar::operator==(const Bar& o) const {
-    return motif == o.motif && transformed == o.transformed && notes == o.notes;
+    return motif == o.motif && device == o.device && transformed == o.transformed && notes == o.notes;
 }
 const char* roleName(Role r) {
     switch (r) {
@@ -32,6 +33,20 @@ const char* operationName(Operation op) {
         case Operation::Omit: return "OMIT";
         case Operation::Anticipate: return "ANTICIPATE";
         case Operation::Answer: return "ANSWER";
+    }
+    return "UNKNOWN";
+}
+const char* deviceName(Device device) {
+    switch(device) {
+        case Device::PedalGap: return "PEDAL_GAP";
+        case Device::DelayedBackbeat: return "DELAYED_BACKBEAT";
+        case Device::CrossPulse: return "CROSS_PULSE";
+        case Device::MotorLock: return "MOTOR_LOCK";
+        case Device::BreakAndShout: return "BREAK_AND_SHOUT";
+        case Device::OctaveInterlock: return "OCTAVE_INTERLOCK";
+        case Device::ClimbRelease: return "CLIMB_RELEASE";
+        case Device::LateSuspension: return "LATE_SUSPENSION";
+        case Device::BrokenAnswer: return "BROKEN_ANSWER";
     }
     return "UNKNOWN";
 }
@@ -63,73 +78,156 @@ void finish(Bar& bar) {
     }
 }
 // A role and beat relationship always determines the next event; never sample each of 16 cells.
+// Devices are compositional schemas with deliberate beat relationships.
+// Variation *inside* a schema changes placement within named musical roles,
+// rather than flipping 16 independent step probabilities.
 Bar minimal(Rng& rng) {
     Bar a; a.motif='A';
-    const int lowEcho = rng.among({1,2,3});
-    const int secondAnchor = rng.among({8,12});
-    const int syncopated = secondAnchor==8 ? rng.among({5,6}) : rng.among({5,6,7});
-    const int answerStep = secondAnchor==8?rng.among({10,11,12,13}):rng.among({9,10,13,14});
+    const int grammar = rng.choose(3);
+    int lowEcho, syncopated, secondAnchor, answerStep, leadingStep;
+    switch(grammar) {
+        case 0: // A gap at the kick on 4; an answer after the kick on 8.
+            a.device=Device::PedalGap;
+            lowEcho=rng.among({1,2,3});
+            syncopated=rng.among({5,6});
+            secondAnchor=8;
+            answerStep=rng.among({10,11,12,13});
+            leadingStep=rng.among({14,15});
+            break;
+        case 1: // Delay the second anchor until beat 4; fill previous space.
+            a.device=Device::DelayedBackbeat;
+            lowEcho=rng.among({1,2,3});
+            syncopated=rng.among({6,7,8});
+            secondAnchor=12;
+            answerStep=rng.among({13,14});
+            leadingStep=15;
+            break;
+        default: // Cross-pulse answer arrives much later than the anchor.
+            a.device=Device::CrossPulse;
+            lowEcho=rng.among({1,2,3});
+            syncopated=4; // Contrasting bass/kick co-onset, unlike PEDAL_GAP.
+            secondAnchor=8;
+            answerStep=rng.among({12,13});
+            leadingStep=rng.among({14,15});
+            break;
+    }
     const int upper = rng.among({3,5,7,12});
     a.notes.push_back(make(1,0,0,Role::Anchor,120,rng.among({1,2})));
     a.notes.push_back(make(2,lowEcho,0,Role::Drive,91,1));
     a.notes.push_back(make(3,syncopated,0,Role::Drive,106,1));
     a.notes.push_back(make(4,secondAnchor,0,Role::Anchor,116,rng.among({1,2})));
     a.notes.push_back(make(5,answerStep,upper,Role::Answer,103,1));
-    auto note=make(6,15,-1,Role::Tension,secondAnchor==8?85:88,1);
+    auto note=make(6,leadingStep,-1,Role::Tension,85,1);
     target(note,1,1); a.notes.push_back(note);
     finish(a);
     return a;
 }
-// The A cell and B response share a pitch motif; B is not separately randomized note soup.
 std::pair<Bar,Bar> classic(Rng& rng) {
-    const int upper = rng.among({7,12});
-    const int color = rng.among({3,5,7});
-    const int firstAnswer = rng.among({2,3});
-    const int beatResponse = rng.among({9,10});
-    const int finalResponse=rng.among({13,14});
-    const int preBeat = rng.among({6,7});
-    const int bPulse = rng.among({0,5});
-    const int bResponse = rng.among({10,11});
-    Bar a; a.motif='A';
-    a.notes={make(1,0,0,Role::Anchor,121),make(2,firstAnswer,upper,Role::Answer,108),
-       make(3,4,0,Role::Anchor,117,2),make(4,preBeat,0,Role::Pickup,113),
-       make(5,beatResponse,upper,Role::Answer,104),make(6,12,0,Role::Anchor,120),
-       make(7,finalResponse,color,Role::Answer,97),make(8,15,0,Role::Pickup,106)};
-    // A's final pickup propels bar B on its downbeat.
-    Bar b; b.motif='B';
-    const int bAnswer=rng.among({2,3,5});
-    const int optionalDrive=rng.among({8,9});
-    b.notes={make(101,0,bPulse,Role::Anchor,121,2),make(102,bAnswer,color,Role::Answer,103),
-       make(103,4,bPulse,Role::Anchor,115),make(104,6,upper,Role::Answer,107),
-       make(105,7,bPulse,Role::Pickup,108),make(106,optionalDrive,bPulse,Role::Drive,93),
-       make(107,bResponse,upper,Role::Answer,108),make(108,12,bPulse,Role::Anchor,120,2)};
-    auto leading=make(109,15,-1,Role::Tension,87); target(leading,1,1); b.notes.push_back(leading);
+    Bar a,b;a.motif='A';b.motif='B';
+    // Structural rhythm devices are deliberate accent/rest patterns, not the
+    // same constant grid with a changed onset-density parameter.
+    const int grammar=rng.choose(3);
+    std::array<int,8> at{};
+    std::array<int,9> bt{};
+    switch(grammar) {
+        case 0: // Pedal pulse and offbeat fifth answers.
+            a.device=b.device=Device::MotorLock;
+            at={{0,2,4,7,10,12,14,15}};
+            bt={{0,3,4,6,7,9,11,12,15}};
+            break;
+        case 1: // Strongly interrupted phrase and a more active answering bar.
+            a.device=b.device=Device::BreakAndShout;
+            at={{0,3,4,7,9,12,14,15}};
+            bt={{0,2,4,6,7,8,10,12,15}};
+            break;
+        default: // Upper answer coincides with the kick on 8, not as a fill.
+            a.device=b.device=Device::OctaveInterlock;
+            at={{0,2,4,6,8,12,13,15}};
+            bt={{0,3,4,6,7,9,10,12,15}};
+            break;
+    }
+    // Within each device, choose between written *phrase positions*.
+    // Each choice preserves the intentional empty beats and guarantees that
+    // a later ANTICIPATE can move the anchor at step 12 into free step 11.
+    at[1]=rng.among({1,2,3});
+    at[3]=rng.among({6,7});
+    at[6]=rng.among({13,14});
+    bt[1]=rng.among({1,2,3});
+    bt[3]=rng.among({5,6});
+    // Device-defining syncopation is *invariant* under the other choices.
+    // MOTOR skips kick-8 in its answering bar, BREAK lands on kick-8,
+    // INTERLOCK places an upper response on kick-8 in the first bar.
+    if(grammar==0) { at[4]=10;bt[5]=9;bt[6]=11; }
+    else if(grammar==1) { at[4]=9;bt[5]=8;bt[6]=10; }
+    else { at[4]=8;bt[5]=9;bt[6]=11; }
+    const int upper=rng.among({7,12});
+    const int color=rng.among({3,5,7});
+    const int bPulse=rng.among({0,5});
+    a.notes={make(1,at[0],0,Role::Anchor,121),
+             make(2,at[1],upper,Role::Answer,108),
+             make(3,at[2],0,Role::Anchor,117,2),
+             make(4,at[3],0,Role::Pickup,113),
+             make(5,at[4],upper,Role::Answer,104),
+             make(6,at[5],0,Role::Anchor,120),
+             make(7,at[6],color,Role::Answer,97),
+             make(8,at[7],0,Role::Pickup,106)};
+    b.notes={make(101,bt[0],bPulse,Role::Anchor,121,2),
+             make(102,bt[1],color,Role::Answer,103),
+             make(103,bt[2],bPulse,Role::Anchor,115),
+             make(104,bt[3],upper,Role::Answer,107),
+             make(105,bt[4],bPulse,Role::Pickup,108),
+             make(106,bt[5],bPulse,Role::Drive,93),
+             make(107,bt[6],upper,Role::Answer,108),
+             make(108,bt[7],bPulse,Role::Anchor,120,2)};
+    auto leading=make(109,bt[8],-1,Role::Tension,87);
+    target(leading,1,1);b.notes.push_back(leading);
     finish(a);finish(b);return {a,b};
 }
-// Directed melodic question / answer with explicit chromatic arrivals.
 std::pair<Bar,Bar> dark(Rng& rng) {
+    Bar a,b;a.motif='A';b.motif='B';
+    const int grammar=rng.choose(3);
+    // Distinct contour tension-release *placements*, with matching answer form.
+    int earlyStep,climbStep,tenseStep,resolveStep,answerStep,descendStep,secondAnswer,lowAnswer;
+    switch(grammar) {
+        case 0: // Tension before the backbeat resolution.
+            a.device=b.device=Device::ClimbRelease;
+            earlyStep=rng.among({3,4});climbStep=rng.among({6,7});
+            tenseStep=rng.among({9,10});resolveStep=12;
+            answerStep=rng.among({4,5});descendStep=rng.among({7,8});
+            secondAnswer=10;lowAnswer=13;
+            break;
+        case 1: // Delayed release on beat 4+, a deliberately suspended shape.
+            a.device=b.device=Device::LateSuspension;
+            earlyStep=rng.among({3,4});climbStep=rng.among({7,8});
+            tenseStep=rng.among({10,11});resolveStep=13;
+            answerStep=rng.among({4,5});descendStep=rng.among({8,9});
+            secondAnswer=11;lowAnswer=14;
+            break;
+        default: // Early climb with a gap before a broken syncopated response.
+            a.device=b.device=Device::BrokenAnswer;
+            earlyStep=rng.among({2,3});climbStep=rng.among({5,6});
+            tenseStep=rng.among({8,9});resolveStep=11;
+            answerStep=rng.among({3,4});descendStep=rng.among({6,7});
+            secondAnswer=10;lowAnswer=13;
+            break;
+    }
     const int targetPitch=rng.among({3,5,7});
     const int summit=rng.among({7,10,12});
-    const int earlyStep=rng.among({3,4});
-    const int climbStep=rng.among({6,7});
-    const int tenseStep=rng.among({9,10});
-    const int answerStep=rng.among({4,5});
-    const int descendStep=rng.among({7,8});
-    const int upperAnswer = std::max(targetPitch+2,rng.among({7,10,12}));
-    Bar a; a.motif='A';
-    a.notes={make(1,0,0,Role::Anchor,117,3),make(2,earlyStep,3,Role::Answer,101,2),
+    const int upperAnswer=std::max(targetPitch+2,rng.among({7,10,12}));
+    a.notes={make(1,0,0,Role::Anchor,117,3),
+             make(2,earlyStep,3,Role::Answer,101,2),
              make(3,climbStep,summit,Role::Drive,107),
-             make(4,tenseStep,summit+1,Role::Tension,110,1),
-             make(5,12,summit,Role::Resolution,107,2)};
+             make(4,tenseStep,summit+rng.among({-1,1}),Role::Tension,110,1),
+             make(5,resolveStep,summit,Role::Resolution,107,2)};
     target(a.notes[3],5,0);
-    auto beforeBar=make(6,15,targetPitch-1,Role::Tension,91,1);
-    target(beforeBar,101,1); a.notes.push_back(beforeBar);
-    Bar b; b.motif='B';
+    auto beforeBar=make(6,15,targetPitch-1,Role::Tension,91);
+    target(beforeBar,101,1);a.notes.push_back(beforeBar);
     b.notes={make(101,0,targetPitch,Role::Resolution,115,3),
-             make(102,answerStep,upperAnswer,Role::Answer,107,1),
+             make(102,answerStep,upperAnswer,Role::Answer,107),
              make(103,descendStep,targetPitch,Role::Drive,113,2),
-             make(104,10,3,Role::Answer,101,2),make(105,13,0,Role::Anchor,112)};
-    auto beforeA=make(106,15,-1,Role::Tension,89,1);
+             make(104,secondAnswer,3,Role::Answer,101,2),
+             make(105,lowAnswer,0,Role::Anchor,112)};
+    auto beforeA=make(106,15,-1,Role::Tension,89);
     target(beforeA,1,1);b.notes.push_back(beforeA);
     finish(a);finish(b);return {a,b};
 }
@@ -245,8 +343,83 @@ void validate(const Composition& c) {
         throw std::invalid_argument("wrong bar count");
     for(int k=0;k<4;++k)if(c.kickSteps[k]!=k*4)
         throw std::invalid_argument("kick reference changed");
+    // The first source motif(s) must match their *named* rhythmic device.
+    // This is an independent structural contract: a changed device label with
+    // unchanged notes is not a different musical grammar.
+    const auto sourceEvent=[](const Bar& b,int id)->const Event& {
+        const auto it=std::find_if(b.notes.begin(),b.notes.end(),
+            [id](const Event& e){return e.id==id;});
+        if(it==b.notes.end())throw std::invalid_argument("missing source role event");
+        return *it;
+    };
+    const auto requireDevice=[](bool predicate) {
+        if(!predicate)throw std::invalid_argument("source device rhythm violated");
+    };
+    const Bar& sourceA=c.bars.front();
+    requireDevice(!sourceA.transformed && sourceA.motif=='A');
+    if(c.settings.style==Style::MinimalBody) {
+        const auto& pickup=sourceEvent(sourceA,3);
+        const auto& anchor=sourceEvent(sourceA,4);
+        const auto& reply=sourceEvent(sourceA,5);
+        requireDevice(anchor.role==Role::Anchor && reply.role==Role::Answer &&
+                 pickup.role==Role::Drive);
+        switch(sourceA.device) {
+            case Device::PedalGap:
+                requireDevice(anchor.step==8 && pickup.step>=5 && pickup.step<=6 &&
+                         reply.step>=10 && reply.step<=13);break;
+            case Device::DelayedBackbeat:
+                requireDevice(anchor.step==12 && pickup.step>=6 && pickup.step<=8 &&
+                         reply.step>=13 && reply.step<=14);break;
+            case Device::CrossPulse:
+                requireDevice(anchor.step==8 && pickup.step==4 &&
+                         reply.step>=12 && reply.step<=13);break;
+            default: throw std::invalid_argument("invalid minimal device");
+        }
+    } else {
+        const Bar& sourceB=c.bars[1];
+        requireDevice(!sourceB.transformed && sourceB.motif=='B' &&
+                 sourceB.device==sourceA.device);
+        if(c.settings.style==Style::ClassicEBM) {
+            const auto& aAnswer=sourceEvent(sourceA,5);
+            const auto& bDrive=sourceEvent(sourceB,106);
+            const auto& bAnswer=sourceEvent(sourceB,107);
+            requireDevice(aAnswer.role==Role::Answer && bDrive.role==Role::Drive &&
+                     bAnswer.role==Role::Answer);
+            switch(sourceA.device) {
+                case Device::MotorLock:
+                    requireDevice(aAnswer.step==10 && bDrive.step==9 && bAnswer.step==11);break;
+                case Device::BreakAndShout:
+                    requireDevice(aAnswer.step==9 && bDrive.step==8 && bAnswer.step==10);break;
+                case Device::OctaveInterlock:
+                    requireDevice(aAnswer.step==8 && bDrive.step==9 && bAnswer.step==11);break;
+                default: throw std::invalid_argument("invalid classic device");
+            }
+        } else {
+            const auto& resolution=sourceEvent(sourceA,5);
+            const auto& answer=sourceEvent(sourceB,104);
+            const auto& lowAnchor=sourceEvent(sourceB,105);
+            requireDevice(resolution.role==Role::Resolution && answer.role==Role::Answer &&
+                     lowAnchor.role==Role::Anchor);
+            switch(sourceA.device) {
+                case Device::ClimbRelease:
+                    requireDevice(resolution.step==12 && answer.step==10 && lowAnchor.step==13);break;
+                case Device::LateSuspension:
+                    requireDevice(resolution.step==13 && answer.step==11 && lowAnchor.step==14);break;
+                case Device::BrokenAnswer:
+                    requireDevice(resolution.step==11 && answer.step==10 && lowAnchor.step==13);break;
+                default: throw std::invalid_argument("invalid dark device");
+            }
+        }
+    }
     for(std::size_t index=0;index<c.bars.size();++index) {
         const Bar& b=c.bars[index];
+        const int device=static_cast<int>(b.device);
+        const int low=c.settings.style==Style::MinimalBody?0:
+                      c.settings.style==Style::ClassicEBM?3:6;
+        if(device<low || device>=low+3)
+            throw std::invalid_argument("device incompatible with chosen style");
+        if(index>0 && b.device!=c.bars.front().device)
+            throw std::invalid_argument("device switched within composed phrase");
         if(b.notes.empty()||(b.motif!='A' && b.motif!='B'))throw std::invalid_argument("invalid motif");
         int nextFree=0;bool hasAnchor=false;
         for(const auto& e:b.notes) {

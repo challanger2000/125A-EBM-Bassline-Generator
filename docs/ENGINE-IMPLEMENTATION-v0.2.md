@@ -6,6 +6,7 @@ This is a newly built role-based **experimental composition system**, not music 
 ## Implementation (src/Composer.cpp)
 
 - **Rhythmic grammar before notes:** each style constructs linked anchors, drive cells, pickups, answers and explicitly located silences relative to 4/4 kick references (0,4,8,12). No per-step Bernoulli/random density fill.
+- **Expanded phrase devices:** three named *source procedures per style* (`Device` tag in every motif bar), each with an invariant rhythmic identity. Validation prohibits faked device labels, mismatched source placement or a mid-phrase device switch. These structures are experimental original composition choices, not transcriptions. See [`GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md`](GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md).
 - **Pitch relationships:** stable pedal events, chosen meaningful answers and directed chromatic tension with a one-semitone explicit target across bars (including 8-to-1 loop seam). Events retain stable motif IDs, roles and target links.
 - **Phrasing:** MINIMAL composes a 1-bar cell; CLASSIC and DARK independently compose two-bar connected cells. Four/eight-bar arrangements reuse cells; no new random bar is filled from scratch.
 - **Operations:** OMIT removes only a named DRIVE; ANTICIPATE moves a chosen anchor one sixteenth earlier **and vacates the old step**; ANSWER changes pitch of a designated response while retaining rhythm; REPEAT is an exact reuse. All are logged with target bar and source event ID.
@@ -16,7 +17,7 @@ This is a newly built role-based **experimental composition system**, not music 
 
 ## Known limitations / open follow-up
 
-1. Three music grammars still operate in a constrained event vocabulary. Perceived authenticity and quality are **unverified**. The current bass instrument in audition WAVs is deliberately simple and is not a sonic target.
+1. Three style grammars now contain nine named structural devices, but the event vocabulary remains constrained. Perceived authenticity and quality are **unverified**. The current bass instrument in audition WAVs is deliberately simple and is not a sonic target.
 2. Raw seeds still sometimes produce identical or near-identical riffs because the musical grammars have finite combinations. A bounded source-motif novelty helper is now implemented and technically tested but NOT connected to a GUI or musical listening. See `docs/QUALITY-AUDIT-2026-10-13.md` for the exact 300-seed data and accepted/fallback semantics.
 3. Musical skeleton remains fixed to sixteenth-note 4/4 / four-kick reference, for controlled evaluation. Additional drum styles or timebases must be musically justified, not added as feature inflation.
 4. Gate and velocity numbers are provisional. No musical ratings, no audio comparison of actual EBM recordings, and no editorial verification of artist-specific transcription.

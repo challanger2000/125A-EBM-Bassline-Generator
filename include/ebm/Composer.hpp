@@ -8,6 +8,12 @@ namespace ebm::v2 {
 // Purely musical intermediate representation. One tick is a 16th in 4/4.
 enum class Role : std::uint8_t { Anchor, Drive, Pickup, Answer, Tension, Resolution };
 enum class Operation : std::uint8_t { Repeat, Omit, Anticipate, Answer };
+// Idiom-specific structural devices, not genre fingerprints or artist presets.
+enum class Device : std::uint8_t {
+    PedalGap, DelayedBackbeat, CrossPulse,
+    MotorLock, BreakAndShout, OctaveInterlock,
+    ClimbRelease, LateSuspension, BrokenAnswer
+};
 struct Event {
     int id = -1;           // Stable within a motif, survives transformations.
     int step = 0;          // 0..15 inside the bar.
@@ -21,6 +27,7 @@ struct Event {
 };
 struct Bar {
     char motif = 'A';     // Identifies the phrase motif source, not a reference recording.
+    Device device = Device::PedalGap;  // Intentional rhythmic grammar of this motif.
     bool transformed = false;
     std::vector<Event> notes;
     bool operator==(const Bar& o) const;
@@ -45,4 +52,5 @@ Phrase render(const Composition& composition);
 void validate(const Composition& composition);
 const char* roleName(Role role);
 const char* operationName(Operation operation);
+const char* deviceName(Device device);
 } // namespace ebm::v2
