@@ -38,6 +38,9 @@ struct Edit {
     int eventId = -1;
     int previousStep = -1;
     int newStep = -1;
+    // ANSWER only: exact pitch-interval transition; zero for other operations.
+    int previousInterval = 0;
+    int newInterval = 0;
 };
 struct Composition {
     Config settings{};

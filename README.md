@@ -2,7 +2,7 @@
 
 **Current status: experimental musical-engine v0.2.0, expanded grammar checkpoint. Not a VST3. Not release-ready.**
 
-The engine develops original monophonic MIDI phrases using musical *roles* instead of the independent onset/pitch lottery used by v0.1. Each profile uses a different compositional grammar; every bar carries stable motif event IDs and explicit transformation records. The three hand-authored v0.2 reference riffs are **specification fixtures**, not notes copied into the generator. No artist MIDI patterns are bundled.
+The engine develops original monophonic MIDI phrases using musical *roles* instead of the independent onset/pitch lottery used by v0.1. Each profile uses a different compositional grammar; every bar carries stable motif event IDs and explicit transformation records. A separate event-lineage audit now reconstructs each later bar from its original motif and named edits, rejecting undocumented pitch, velocity, gate, role or rhythm modifications. The three hand-authored v0.2 reference riffs are **specification fixtures**, not notes copied into the generator. No artist MIDI patterns are bundled.
 
 ## Three experimental style grammars with nine explicit devices
 
@@ -19,7 +19,7 @@ Configuration: root MIDI 24–60, 4 or 8 bars in 4/4, deterministic seed, variat
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure  # three local suites
+ctest --test-dir build -C Release --output-on-failure  # four local suites
 ```
 
 For three optional diagnostic examples (not a 90-file listening assignment):
@@ -37,6 +37,7 @@ Windows multi-config generators generally place the CLI at `build/Release/ebm_pr
 - Implemented architecture and caveats: [`docs/ENGINE-IMPLEMENTATION-v0.2.md`](docs/ENGINE-IMPLEMENTATION-v0.2.md)
 - Musical phrase-ending audit: [`docs/PHRASE-ENDINGS-AUDIT-2026-10-13.md`](docs/PHRASE-ENDINGS-AUDIT-2026-10-13.md)
 - New compositional breadth audit: [`docs/GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md`](docs/GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md)
+- Motif-lineage regression: [`docs/MOTIF-LINEAGE-AUDIT-2026-10-13.md`](docs/MOTIF-LINEAGE-AUDIT-2026-10-13.md)
 - Test evidence: [`docs/QA-STATUS.md`](docs/QA-STATUS.md) and [quality audit](docs/QUALITY-AUDIT-2026-10-13.md)
 
 Guidance: `challanger2000/125A-Engineering/START-HERE.md` and relevant standards. `main` is unchanged. v0.1 remains recoverable from Git history, but is **not** the accepted composition model.

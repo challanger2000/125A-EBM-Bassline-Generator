@@ -282,8 +282,9 @@ void answer(Composition& c,int bar,int id,int newInterval) {
     Bar& b=c.bars[static_cast<std::size_t>(bar)];
     Event& e=byId(b,id);
     if(e.role!=Role::Answer||e.interval==newInterval)throw std::logic_error("invalid ANSWER");
+    const int previousInterval=e.interval;
     e.interval=newInterval;b.transformed=true;
-    c.edits.push_back({bar,Operation::Answer,id,e.step,e.step});
+    c.edits.push_back({bar,Operation::Answer,id,e.step,e.step,previousInterval,newInterval});
 }
 void checkConfig(const Config& cfg) {
     if(cfg.bars!=4&&cfg.bars!=8)throw std::invalid_argument("bars must be 4 or 8");
@@ -361,6 +362,71 @@ Composition compose(const Config& cfg) {
     validate(out);
     return out;
 }
+// Independent event-lineage audit. A later bar is legally derived only by
+// replaying its explicit operations against the untouched A or B source motif.
+// This deliberately does NOT use the mutation helpers above, so the check
+// cannot silently follow an undocumented side effect of an implementation.
+static void verifyLineage(const Composition& c) {
+    const int sourceCount=c.settings.style==Style::MinimalBody?1:2;
+    for(std::size_t barIndex=0;barIndex<c.bars.size();++barIndex) {
+        const Bar& actual=c.bars[barIndex];
+        const Bar& source=c.bars[barIndex%static_cast<std::size_t>(sourceCount)];
+        Bar reconstructed=source;
+        bool changed=false;
+        if(barIndex < static_cast<std::size_t>(sourceCount)) {
+            for(const Edit& edit:c.edits)
+                if(edit.bar==static_cast<int>(barIndex))
+                    throw std::invalid_argument("source motif may not be edited");
+            if(actual.transformed || actual.notes!=source.notes)
+                throw std::invalid_argument("modified source motif");
+            continue;
+        }
+        for(const Edit& edit:c.edits) {
+            if(edit.bar!=static_cast<int>(barIndex))continue;
+            auto it=std::find_if(reconstructed.notes.begin(),reconstructed.notes.end(),
+                [&](const Event& event){return event.id==edit.eventId;});
+            if(it==reconstructed.notes.end())
+                throw std::invalid_argument("edit references missing or already omitted event");
+            switch(edit.operation) {
+                case Operation::Omit:
+                    if(edit.previousStep!=it->step || edit.newStep!=-1 ||
+                       edit.previousInterval!=0 || edit.newInterval!=0 ||
+                       it->role!=Role::Drive)
+                        throw std::invalid_argument("unverifiable OMIT");
+                    reconstructed.notes.erase(it);
+                    break;
+                case Operation::Anticipate:
+                    if(edit.previousStep!=it->step || edit.newStep!=it->step-1 ||
+                       edit.previousInterval!=0 || edit.newInterval!=0 ||
+                       it->role!=Role::Anchor || edit.newStep<=0 ||
+                       std::any_of(reconstructed.notes.begin(),reconstructed.notes.end(),
+                           [&](const Event& another){return another.id!=it->id && another.step==edit.newStep;}))
+                        throw std::invalid_argument("unverifiable ANTICIPATE");
+                    it->step=edit.newStep;
+                    it->role=Role::Pickup;
+                    it->duration=1;
+                    break;
+                case Operation::Answer:
+                    if(edit.previousStep!=it->step || edit.newStep!=it->step ||
+                       it->role!=Role::Answer || it->interval!=edit.previousInterval ||
+                       edit.previousInterval==edit.newInterval)
+                        throw std::invalid_argument("unverifiable ANSWER");
+                    it->interval=edit.newInterval;
+                    break;
+                default:
+                    throw std::invalid_argument("unsupported or fake motif operation");
+            }
+            // Length can be shortened by a shifted onset; it is never
+            // silently lengthened by removing a subsequent event.
+            finish(reconstructed);
+            changed=true;
+        }
+        reconstructed.transformed=changed;
+        if(!(reconstructed==actual))
+            throw std::invalid_argument("bar differs from documented motif transformations");
+    }
+}
+
 void validate(const Composition& c) {
     checkConfig(c.settings);
     if(c.bars.size()!=static_cast<std::size_t>(c.settings.bars))
@@ -512,6 +578,7 @@ void validate(const Composition& c) {
                 throw std::invalid_argument("omission not real");
         }
     }
+    verifyLineage(c);
 }
 Phrase render(const Composition& c) {
     validate(c);
