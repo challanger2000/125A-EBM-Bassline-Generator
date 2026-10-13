@@ -98,7 +98,10 @@ int main(){
                 }
                 CHECK(findRole(a,4).targetId==5);
                 CHECK(findRole(a,6).targetId==101);
-                CHECK(findRole(b,106).targetId==1);
+                if(a.device==Device::LateSuspension) {
+                    CHECK(std::none_of(b.notes.begin(),b.notes.end(),
+                         [](const Event& e){return e.id==106;}));
+                } else CHECK(findRole(b,106).targetId==1);
             }
         }
         CHECK(devices.size()==3); // Every claimed grammar is actually reachable.

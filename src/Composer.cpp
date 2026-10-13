@@ -117,8 +117,23 @@ Bar minimal(Rng& rng) {
     a.notes.push_back(make(3,syncopated,0,Role::Drive,106,1));
     a.notes.push_back(make(4,secondAnchor,0,Role::Anchor,116,rng.among({1,2})));
     a.notes.push_back(make(5,answerStep,upper,Role::Answer,103,1));
-    auto note=make(6,leadingStep,-1,Role::Tension,85,1);
-    target(note,1,1); a.notes.push_back(note);
+    // PedalGap/DelayedBackbeat conclude with air; a compulsory chromatic
+    // pickup every bar would turn a purposeful hypnotic rest into a cliche.
+    // CrossPulse deliberately carries an approach into the next downbeat.
+    if(a.device==Device::CrossPulse) {
+        auto note=make(6,leadingStep,-1,Role::Tension,85,1);
+        target(note,1,1); a.notes.push_back(note);
+    } else if(a.device==Device::PedalGap) {
+        // Three deliberate conclusions: leave space, an early tonic return
+        // followed by a rest, or a tonic pickup just before the downbeat.
+        // The latter two are *rhythmic* choices, not the mandatory chromatic
+        // -1 semitone found in every source bar of the previous prototype.
+        const int ending=rng.choose(3);
+        if(ending==1 && answerStep<=12)
+            a.notes.push_back(make(6,14,0,Role::Pickup,85));
+        else if(ending==2)
+            a.notes.push_back(make(6,15,0,Role::Pickup,88));
+    }
     finish(a);
     return a;
 }
@@ -179,8 +194,12 @@ std::pair<Bar,Bar> classic(Rng& rng) {
              make(106,bt[5],bPulse,Role::Drive,93),
              make(107,bt[6],upper,Role::Answer,108),
              make(108,bt[7],bPulse,Role::Anchor,120,2)};
-    auto leading=make(109,bt[8],-1,Role::Tension,87);
-    target(leading,1,1);b.notes.push_back(leading);
+    // BREAK_AND_SHOUT ends on its weighty low anchor and leaves steps 14-15
+    // silent. MOTOR/INTERLOCK are driven *toward* the following downbeat.
+    if(a.device!=Device::BreakAndShout) {
+        auto leading=make(109,bt[8],-1,Role::Tension,87);
+        target(leading,1,1);b.notes.push_back(leading);
+    }
     finish(a);finish(b);return {a,b};
 }
 std::pair<Bar,Bar> dark(Rng& rng) {
@@ -227,8 +246,13 @@ std::pair<Bar,Bar> dark(Rng& rng) {
              make(103,descendStep,targetPitch,Role::Drive,113,2),
              make(104,secondAnswer,3,Role::Answer,101,2),
              make(105,lowAnswer,0,Role::Anchor,112)};
-    auto beforeA=make(106,15,-1,Role::Tension,89);
-    target(beforeA,1,1);b.notes.push_back(beforeA);
+    // The sustained/suspended answer must be allowed to breathe: unlike
+    // CLIMB_RELEASE or BROKEN_ANSWER it does not require a chromatic pickup
+    // into the next A. An A->B resolution remains explicitly present.
+    if(a.device!=Device::LateSuspension) {
+        auto beforeA=make(106,15,-1,Role::Tension,89);
+        target(beforeA,1,1);b.notes.push_back(beforeA);
+    }
     finish(a);finish(b);return {a,b};
 }
 Event& byId(Bar& b,int id) {
@@ -355,8 +379,14 @@ void validate(const Composition& c) {
     const auto requireDevice=[](bool predicate) {
         if(!predicate)throw std::invalid_argument("source device rhythm violated");
     };
+    const auto hasId=[](const Bar& bar,int id) {
+        return std::any_of(bar.notes.begin(),bar.notes.end(),
+            [id](const Event& e){return e.id==id;});
+    };
     const Bar& sourceA=c.bars.front();
     requireDevice(!sourceA.transformed && sourceA.motif=='A');
+    const auto& opening=sourceEvent(sourceA,1);
+    requireDevice(opening.step==0 && opening.role==Role::Anchor && opening.interval==0);
     if(c.settings.style==Style::MinimalBody) {
         const auto& pickup=sourceEvent(sourceA,3);
         const auto& anchor=sourceEvent(sourceA,4);
@@ -366,19 +396,30 @@ void validate(const Composition& c) {
         switch(sourceA.device) {
             case Device::PedalGap:
                 requireDevice(anchor.step==8 && pickup.step>=5 && pickup.step<=6 &&
-                         reply.step>=10 && reply.step<=13);break;
+                         reply.step>=10 && reply.step<=13);
+                if(hasId(sourceA,6)) {
+                    const auto& ending=sourceEvent(sourceA,6);
+                    requireDevice(ending.role==Role::Pickup && ending.interval==0 &&
+                        ending.targetId==-1 && ending.targetBarDelta==0 &&
+                        (ending.step==15 || (ending.step==14 && reply.step<=12)));
+                }
+                break;
             case Device::DelayedBackbeat:
                 requireDevice(anchor.step==12 && pickup.step>=6 && pickup.step<=8 &&
-                         reply.step>=13 && reply.step<=14);break;
+                         reply.step>=13 && reply.step<=14 && !hasId(sourceA,6));break;
             case Device::CrossPulse:
                 requireDevice(anchor.step==8 && pickup.step==4 &&
-                         reply.step>=12 && reply.step<=13);break;
+                         reply.step>=12 && reply.step<=13 && hasId(sourceA,6) &&
+                         sourceEvent(sourceA,6).role==Role::Tension);break;
             default: throw std::invalid_argument("invalid minimal device");
         }
     } else {
         const Bar& sourceB=c.bars[1];
         requireDevice(!sourceB.transformed && sourceB.motif=='B' &&
                  sourceB.device==sourceA.device);
+        const auto& responseStart=sourceEvent(sourceB,101);
+        requireDevice(responseStart.step==0 &&
+                      (responseStart.role==Role::Anchor || responseStart.role==Role::Resolution));
         if(c.settings.style==Style::ClassicEBM) {
             const auto& aAnswer=sourceEvent(sourceA,5);
             const auto& bDrive=sourceEvent(sourceB,106);
@@ -387,11 +428,14 @@ void validate(const Composition& c) {
                      bAnswer.role==Role::Answer);
             switch(sourceA.device) {
                 case Device::MotorLock:
-                    requireDevice(aAnswer.step==10 && bDrive.step==9 && bAnswer.step==11);break;
+                    requireDevice(aAnswer.step==10 && bDrive.step==9 && bAnswer.step==11 &&
+                                  hasId(sourceB,109));break;
                 case Device::BreakAndShout:
-                    requireDevice(aAnswer.step==9 && bDrive.step==8 && bAnswer.step==10);break;
+                    requireDevice(aAnswer.step==9 && bDrive.step==8 && bAnswer.step==10 &&
+                                  !hasId(sourceB,109));break;
                 case Device::OctaveInterlock:
-                    requireDevice(aAnswer.step==8 && bDrive.step==9 && bAnswer.step==11);break;
+                    requireDevice(aAnswer.step==8 && bDrive.step==9 && bAnswer.step==11 &&
+                                  hasId(sourceB,109));break;
                 default: throw std::invalid_argument("invalid classic device");
             }
         } else {
@@ -402,11 +446,14 @@ void validate(const Composition& c) {
                      lowAnchor.role==Role::Anchor);
             switch(sourceA.device) {
                 case Device::ClimbRelease:
-                    requireDevice(resolution.step==12 && answer.step==10 && lowAnchor.step==13);break;
+                    requireDevice(resolution.step==12 && answer.step==10 && lowAnchor.step==13 &&
+                                  hasId(sourceB,106));break;
                 case Device::LateSuspension:
-                    requireDevice(resolution.step==13 && answer.step==11 && lowAnchor.step==14);break;
+                    requireDevice(resolution.step==13 && answer.step==11 && lowAnchor.step==14 &&
+                                  !hasId(sourceB,106));break;
                 case Device::BrokenAnswer:
-                    requireDevice(resolution.step==11 && answer.step==10 && lowAnchor.step==13);break;
+                    requireDevice(resolution.step==11 && answer.step==10 && lowAnchor.step==13 &&
+                                  hasId(sourceB,106));break;
                 default: throw std::invalid_argument("invalid dark device");
             }
         }
