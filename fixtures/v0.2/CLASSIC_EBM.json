@@ -1,0 +1,218 @@
+{
+  "name": "CLASSIC_EBM",
+  "title": "Drive / Displacement",
+  "bpm": 120,
+  "root_midi": 36,
+  "bars": 8,
+  "motif_bars": 2,
+  "device": "2-bar drive A/B. B_OMIT drops optional drive at step 9; A_ANTICIPATE moves step-12 anchor to empty step 11, vacating 12.",
+  "kick_steps": [
+    0,
+    4,
+    8,
+    12
+  ],
+  "parts": {
+    "A": {
+      "notes": [
+        {
+          "id": "a0",
+          "step": 0,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 120,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "a2",
+          "step": 2,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 96,
+          "role": "DRIVE"
+        },
+        {
+          "id": "a3",
+          "step": 3,
+          "pitch": 43,
+          "duration": 1,
+          "velocity": 106,
+          "role": "ANSWER"
+        },
+        {
+          "id": "a4",
+          "step": 4,
+          "pitch": 36,
+          "duration": 2,
+          "velocity": 117,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "a7",
+          "step": 7,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 112,
+          "role": "PICKUP"
+        },
+        {
+          "id": "a10",
+          "step": 10,
+          "pitch": 43,
+          "duration": 1,
+          "velocity": 103,
+          "role": "ANSWER"
+        },
+        {
+          "id": "a12",
+          "step": 12,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 121,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "a14",
+          "step": 14,
+          "pitch": 39,
+          "duration": 1,
+          "velocity": 99,
+          "role": "ANSWER"
+        },
+        {
+          "id": "a15",
+          "step": 15,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 104,
+          "role": "PICKUP"
+        }
+      ]
+    },
+    "B": {
+      "notes": [
+        {
+          "id": "b0",
+          "step": 0,
+          "pitch": 36,
+          "duration": 2,
+          "velocity": 120,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "b3",
+          "step": 3,
+          "pitch": 39,
+          "duration": 1,
+          "velocity": 100,
+          "role": "ANSWER"
+        },
+        {
+          "id": "b4",
+          "step": 4,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 112,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "b6",
+          "step": 6,
+          "pitch": 43,
+          "duration": 1,
+          "velocity": 108,
+          "role": "ANSWER"
+        },
+        {
+          "id": "b7",
+          "step": 7,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 103,
+          "role": "PICKUP"
+        },
+        {
+          "id": "b9",
+          "step": 9,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 99,
+          "role": "DRIVE"
+        },
+        {
+          "id": "b11",
+          "step": 11,
+          "pitch": 43,
+          "duration": 1,
+          "velocity": 102,
+          "role": "ANSWER"
+        },
+        {
+          "id": "b12",
+          "step": 12,
+          "pitch": 36,
+          "duration": 2,
+          "velocity": 118,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "b15",
+          "step": 15,
+          "pitch": 35,
+          "duration": 1,
+          "velocity": 88,
+          "role": "TENSION",
+          "target": {
+            "part": "A",
+            "id": "a0",
+            "offset_bars": 1
+          }
+        }
+      ]
+    },
+    "A_ANTICIPATE": {
+      "from": "A",
+      "operations": [
+        {
+          "op": "ANTICIPATE",
+          "id": "a12",
+          "from_step": 12,
+          "to_step": 11,
+          "new_role": "PICKUP"
+        }
+      ]
+    },
+    "B_OMIT": {
+      "from": "B",
+      "operations": [
+        {
+          "op": "OMIT",
+          "id": "b9"
+        }
+      ]
+    }
+  },
+  "arrangement": [
+    "A",
+    "B",
+    "A",
+    "B_OMIT",
+    "A",
+    "B",
+    "A_ANTICIPATE",
+    "B"
+  ],
+  "acceptance": {
+    "repeat_identity_bars": [
+      0,
+      2,
+      4
+    ],
+    "expected_anticipation_bar": 6,
+    "expected_omit_bar": 3,
+    "preserve_answer_pitches": [
+      39,
+      43
+    ]
+  }
+}

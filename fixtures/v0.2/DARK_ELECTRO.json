@@ -1,0 +1,172 @@
+{
+  "name": "DARK_ELECTRO",
+  "title": "Ascend / Suspended Answer",
+  "bpm": 120,
+  "root_midi": 33,
+  "bars": 8,
+  "motif_bars": 2,
+  "device": "A minor two-bar question/answer. A–C–E–F–E–D# -> E at the next bar. B answer E–G–E–C–B–A. B' preserves note onsets and changes G→F, C→D.",
+  "kick_steps": [
+    0,
+    4,
+    8,
+    12
+  ],
+  "parts": {
+    "A": {
+      "notes": [
+        {
+          "id": "a0",
+          "step": 0,
+          "pitch": 33,
+          "duration": 3,
+          "velocity": 117,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "a4",
+          "step": 4,
+          "pitch": 36,
+          "duration": 2,
+          "velocity": 102,
+          "role": "ANSWER"
+        },
+        {
+          "id": "a7",
+          "step": 7,
+          "pitch": 40,
+          "duration": 1,
+          "velocity": 109,
+          "role": "DRIVE"
+        },
+        {
+          "id": "a8",
+          "step": 8,
+          "pitch": 41,
+          "duration": 3,
+          "velocity": 116,
+          "role": "TENSION",
+          "target": {
+            "part": "A",
+            "id": "a12",
+            "offset_bars": 0
+          }
+        },
+        {
+          "id": "a12",
+          "step": 12,
+          "pitch": 40,
+          "duration": 2,
+          "velocity": 105,
+          "role": "RESOLUTION"
+        },
+        {
+          "id": "a15",
+          "step": 15,
+          "pitch": 39,
+          "duration": 1,
+          "velocity": 89,
+          "role": "TENSION",
+          "target": {
+            "part": "B",
+            "id": "b0",
+            "offset_bars": 1
+          }
+        }
+      ]
+    },
+    "B": {
+      "notes": [
+        {
+          "id": "b0",
+          "step": 0,
+          "pitch": 40,
+          "duration": 3,
+          "velocity": 113,
+          "role": "RESOLUTION"
+        },
+        {
+          "id": "b4",
+          "step": 4,
+          "pitch": 43,
+          "duration": 1,
+          "velocity": 104,
+          "role": "ANSWER"
+        },
+        {
+          "id": "b6",
+          "step": 6,
+          "pitch": 40,
+          "duration": 2,
+          "velocity": 112,
+          "role": "DRIVE"
+        },
+        {
+          "id": "b9",
+          "step": 9,
+          "pitch": 36,
+          "duration": 3,
+          "velocity": 100,
+          "role": "ANSWER"
+        },
+        {
+          "id": "b13",
+          "step": 13,
+          "pitch": 35,
+          "duration": 1,
+          "velocity": 95,
+          "role": "DRIVE"
+        },
+        {
+          "id": "b15",
+          "step": 15,
+          "pitch": 33,
+          "duration": 1,
+          "velocity": 117,
+          "role": "ANCHOR"
+        }
+      ]
+    },
+    "B_ANSWER": {
+      "from": "B",
+      "operations": [
+        {
+          "op": "ANSWER",
+          "changes": [
+            {
+              "id": "b4",
+              "from_pitch": 43,
+              "to_pitch": 41
+            },
+            {
+              "id": "b9",
+              "from_pitch": 36,
+              "to_pitch": 38
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "arrangement": [
+    "A",
+    "B",
+    "A",
+    "B_ANSWER",
+    "A",
+    "B",
+    "A",
+    "B_ANSWER"
+  ],
+  "acceptance": {
+    "directed_chromatic_resolution": [
+      "a15",
+      "b0"
+    ],
+    "answers_keep_rhythm": true,
+    "anchors": [
+      33,
+      40
+    ]
+  }
+}

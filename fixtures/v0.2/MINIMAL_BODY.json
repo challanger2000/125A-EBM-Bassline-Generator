@@ -1,0 +1,93 @@
+{
+  "name": "MINIMAL_BODY",
+  "title": "Pedal / Empty Space",
+  "bpm": 120,
+  "root_midi": 36,
+  "bars": 8,
+  "motif_bars": 1,
+  "device": "Single-bar C pedal; upper fifth answer and B leading tone into next C; eight exact repeats without forced fill.",
+  "kick_steps": [
+    0,
+    4,
+    8,
+    12
+  ],
+  "parts": {
+    "A": {
+      "notes": [
+        {
+          "id": "a0",
+          "step": 0,
+          "pitch": 36,
+          "duration": 2,
+          "velocity": 119,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "a2",
+          "step": 2,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 88,
+          "role": "DRIVE"
+        },
+        {
+          "id": "a5",
+          "step": 5,
+          "pitch": 36,
+          "duration": 2,
+          "velocity": 106,
+          "role": "DRIVE"
+        },
+        {
+          "id": "a8",
+          "step": 8,
+          "pitch": 36,
+          "duration": 1,
+          "velocity": 116,
+          "role": "ANCHOR"
+        },
+        {
+          "id": "a10",
+          "step": 10,
+          "pitch": 43,
+          "duration": 1,
+          "velocity": 102,
+          "role": "ANSWER"
+        },
+        {
+          "id": "a14",
+          "step": 14,
+          "pitch": 35,
+          "duration": 1,
+          "velocity": 84,
+          "role": "TENSION",
+          "target": {
+            "part": "A",
+            "id": "a0",
+            "offset_bars": 1
+          }
+        }
+      ]
+    }
+  },
+  "arrangement": [
+    "A",
+    "A",
+    "A",
+    "A",
+    "A",
+    "A",
+    "A",
+    "A"
+  ],
+  "acceptance": {
+    "exact_repeat": true,
+    "allowed_pitches": [
+      35,
+      36,
+      43
+    ],
+    "expected_pulse": "Anchor on 0/8; empty kick at 4; upper answer at 10."
+  }
+}
