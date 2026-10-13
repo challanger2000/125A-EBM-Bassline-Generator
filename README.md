@@ -1,20 +1,38 @@
 # 125A EBM Bassline Generator
 
-**Status: exploratory musical-engine prototype v0.1.0 — NOT a VST3, NOT FINAL.**
+**Current status: musical-engine research prototype v0.2.0. Not a VST3. Not release-ready.**
 
-Standalone C++17 composition engine to determine whether three provisional EBM-inspired bassline styles can produce useful musical material *before* investing in GUI/VST3 work.
+The engine develops original monophonic MIDI phrases using musical *roles* instead of the independent onset/pitch lottery used by v0.1. Each profile uses a different compositional grammar; every bar carries stable motif event IDs and explicit transformation records. The three hand-authored v0.2 reference riffs are **specification fixtures**, not notes copied into the generator. No artist MIDI patterns are bundled.
 
-## Output
+## Three experimental grammars
 
-MINIMAL_BODY, CLASSIC_EBM, DARK_ELECTRO produce deterministic monophonic 4- or 8-bar MIDI phrases from an explicit seed, root note and controlled phrase development. MIDI files are Standard MIDI Files (format 0) with 480 PPQ, one channel and 120 BPM tempo metadata. Generated material is original procedural data, not copied MIDI transcriptions.
+- `MINIMAL_BODY`: one-bar pedal, active rests, upper answer, chromatic return to the next bar. Eight exact repeats are allowed at VARIATION=0.
+- `CLASSIC_EBM`: two-bar motor/response, deliberate pickups, optional fifth-degree pedal move, structured omission and anticipation.
+- `DARK_ELECTRO`: two-bar contour question/answer, two targeted chromatic approaches, stable resolutions, rhythm-preserving answer variation.
 
-## Build and preview
+Configuration: root MIDI 24–60, 4 or 8 bars in 4/4, deterministic seed, variation 0–100. 0 means literal musical repetitions; positive values trigger typed transformations. At 60+ intensity another answer may change in eight-bar phrases. Intensity is *not* a probability of isolated per-step mutation. MIDI export uses standard format 0, 480 PPQ, fixed file tempo 120 BPM; future VST3 host-following tempo/sync is a separate gate.
 
-    cmake -S . -B build -DBUILD_TESTING=ON
-    cmake --build build --config Release
-    ctest --test-dir build -C Release --output-on-failure
-    ./build/ebm_batch previews
+## Build/test (local, no paid Actions)
 
-On Windows multi-config generators the batch tool is typically at build/Release/ebm_batch.exe. The 90 preview MIDIs can be imported directly into a DAW; no terminal is needed to audition them once generated.
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
 
-See [musical design](docs/MUSICAL-SPEC.md) and [QA gates](docs/QA-STATUS.md). Engineering policy is defined by challanger2000/125A-Engineering/START-HERE.md and its references. No GitHub Actions workflow has been added.
+For three optional diagnostic examples (not a 90-file listening assignment):
+
+```sh
+./build/ebm_preview previews
+python tests/verify_midi.py previews/*.mid
+```
+
+Windows multi-config generators generally place the CLI at `build/Release/ebm_preview.exe`.
+
+- Musical requirements: [`docs/MUSICAL-CONTRACT-v0.2.md`](docs/MUSICAL-CONTRACT-v0.2.md)
+- Three original hand-authored target motifs: [`docs/COMPOSED-REFERENCE-RIFFS-v0.2.md`](docs/COMPOSED-REFERENCE-RIFFS-v0.2.md)
+- Source evidence: [`docs/RESEARCH-EBM-MUSICAL-EVIDENCE.md`](docs/RESEARCH-EBM-MUSICAL-EVIDENCE.md)
+- Implemented architecture and caveats: [`docs/ENGINE-IMPLEMENTATION-v0.2.md`](docs/ENGINE-IMPLEMENTATION-v0.2.md)
+- Test evidence: [`docs/QA-STATUS.md`](docs/QA-STATUS.md)
+
+Guidance: `challanger2000/125A-Engineering/START-HERE.md` and relevant standards. `main` is unchanged. v0.1 remains recoverable from Git history, but is **not** the accepted composition model.
