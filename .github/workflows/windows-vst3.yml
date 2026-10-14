@@ -52,6 +52,7 @@ jobs:
           Move-Item -LiteralPath $source -Destination $target
           $bin = Join-Path $target 'Contents/x86_64-win/EBMBasslineGenerator.vst3'
           if (-not (Test-Path $bin -PathType Leaf)) { throw 'Missing Windows x64 module' }
+          Move-Item -LiteralPath $bin -Destination (Join-Path $target 'Contents/x86_64-win/125A EBM Bassline Generator.vst3')
       - name: Steinberg Validator against real Windows VST3
         shell: pwsh
         run: |
