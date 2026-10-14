@@ -32,7 +32,17 @@ static int backboneDifference(const Composition& a,const Composition& b) {
 }
 
 int main(){
-    const bool sanitizerSmoke=std::getenv("EBM_CORE_SAN_SMOKE")!=nullptr;
+    // MSVC treats getenv() as C4996 under /WX. Use its checked CRT API.
+    bool sanitizerSmoke=false;
+#if defined(_MSC_VER)
+    char* smokeEnvironment=nullptr;
+    std::size_t smokeLength=0;
+    const auto envStatus=_dupenv_s(&smokeEnvironment,&smokeLength,"EBM_CORE_SAN_SMOKE");
+    sanitizerSmoke=(envStatus==0 && smokeEnvironment!=nullptr);
+    std::free(smokeEnvironment);
+#else
+    sanitizerSmoke=std::getenv("EBM_CORE_SAN_SMOKE")!=nullptr;
+#endif
     const int casesPerStyle=sanitizerSmoke?250:3000;
     int previousMislabels=0,strictAccepted=0,fallbacks=0,compared=0;
     for(int style=0;style<3;++style){
