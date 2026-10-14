@@ -137,7 +137,6 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME EBM_OneShot_And_Loop_Seam COMMAND ebm_loop_boundary_tests)
 endif()
-
 add_executable(ebm_boundary_demo tools/ebm_boundary_demo.cpp)
 target_link_libraries(ebm_boundary_demo PRIVATE ebm_core)
 
@@ -168,13 +167,25 @@ if(BUILD_TESTING)
     add_test(NAME EBM_VST3_Host_Bridge_Contract COMMAND ebm_host_bridge_tests)
 endif()
 
-option(EBM_ENABLE_VST3 "Build experimental MIDI-only VST3 without GUI" OFF)
+# SDK-free GUI policy and real composer/Session wiring regression.
+if(BUILD_TESTING)
+ add_executable(ebm_gui_policy_tests tests/gui_policy_tests.cpp)
+ target_link_libraries(ebm_gui_policy_tests PRIVATE ebm_core)
+ if(MSVC)
+  target_compile_options(ebm_gui_policy_tests PRIVATE /W4 /WX)
+ else()
+  target_compile_options(ebm_gui_policy_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+ endif()
+ add_test(NAME EBM_GUI_Control_Policy COMMAND ebm_gui_policy_tests)
+endif()
+
+option(EBM_ENABLE_VST3 "Build experimental MIDI-only VST3 with GUI" OFF)
 if(EBM_ENABLE_VST3)
     set(SMTG_RUN_VST_VALIDATOR OFF CACHE BOOL "" FORCE)
     set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
     set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES ON CACHE BOOL "" FORCE)
-    set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+    set(SMTG_ENABLE_VSTGUI_SUPPORT ON CACHE BOOL "" FORCE)
     include(FetchContent)
     FetchContent_Declare(vst3sdk
         GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
@@ -182,8 +193,12 @@ if(EBM_ENABLE_VST3)
         GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(vst3sdk)
     smtg_add_vst3plugin(EBMBasslineGenerator
-        src/vst3/Plugin.cpp src/vst3/Plugin.hpp)
-    target_link_libraries(EBMBasslineGenerator PRIVATE sdk ebm_core)
+        src/vst3/Plugin.cpp src/vst3/Plugin.hpp
+        src/vst3/EbmPanel.cpp src/vst3/EbmPanel.hpp
+        src/vst3/EbmBrand.cpp src/vst3/EbmBrand.hpp src/vst3/UiGeometry.hpp)
+    target_link_libraries(EBMBasslineGenerator PRIVATE sdk ebm_core vstgui_support)
+    smtg_target_add_plugin_resources(EBMBasslineGenerator RESOURCES
+       resource/ebm.uidesc resource/125A_Logo_Master_FINAL.svg)
     target_include_directories(EBMBasslineGenerator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     if(WIN32)
         target_sources(EBMBasslineGenerator PRIVATE

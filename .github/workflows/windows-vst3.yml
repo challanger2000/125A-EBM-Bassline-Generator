@@ -5,11 +5,11 @@ on:
       - research/v0.2.0-musical-foundation
     paths:
       - 'src/vst3/**'
+      - 'resource/**'
       - 'src/HostBridge.cpp'
       - 'include/ebm/HostBridge.hpp'
       - 'tests/host_bridge_tests.cpp'
-      - 'tests/core_novelty_tests.cpp'
-      - 'tests/engine_tests.cpp'
+      - 'tests/gui_policy_tests.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-vst3.yml'
   workflow_dispatch:
@@ -21,10 +21,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Configure SDK 3.8.1 x64
+      - name: Configure Steinberg SDK 3.8.1 Windows x64
         shell: pwsh
         run: cmake -S . -B build-vst3 -G "Visual Studio 17 2022" -A x64 -DEBM_ENABLE_VST3=ON
-      - name: Build experimental VST3 and 14 C++ test programs
+      - name: Build experimental GUI VST3 and 15 C++ tests
         shell: pwsh
         run: >-
           cmake --build build-vst3 --config Release --parallel 4 --target
@@ -33,27 +33,42 @@ jobs:
           ebm_groove_interlock_tests ebm_session_tests ebm_alternative_tests
           ebm_rhythmic_novelty_tests ebm_core_novelty_tests
           ebm_loop_boundary_tests ebm_live_midi_tests ebm_host_bridge_tests
-      - name: Run all 14 Windows core/host regressions
+          ebm_gui_policy_tests
+      - name: Run all Windows core and GUI regressions
         shell: pwsh
         run: ctest --test-dir build-vst3 -C Release --output-on-failure -j 4
-      - name: Build official Steinberg VST3 Validator
+      - name: Build original Steinberg VST3 Validator
         shell: pwsh
         run: cmake --build build-vst3 --config Release --parallel 4 --target validator
-      - name: Stage verified native VST3 bundle
+      - name: Stage complete branded GUI VST3
         shell: pwsh
         run: |
           $bundles = @(Get-ChildItem -Path build-vst3 -Directory -Filter 'EBMBasslineGenerator.vst3' -Recurse)
-          if ($bundles.Count -lt 1) { throw 'Missing EBM VST3 bundle' }
+          if ($bundles.Count -lt 1) { throw 'Missing built EBM VST3 bundle' }
           New-Item -ItemType Directory -Force -Path stage | Out-Null
           Copy-Item -LiteralPath $bundles[0].FullName -Destination stage -Recurse
           $source = Join-Path stage 'EBMBasslineGenerator.vst3'
           $target = Join-Path stage '125A EBM Bassline Generator.vst3'
-          if (-not (Test-Path $source -PathType Container)) { throw 'Incomplete VST3 bundle' }
+          if (-not (Test-Path $source -PathType Container)) { throw 'Missing copied VST3 bundle' }
           Move-Item -LiteralPath $source -Destination $target
-          $bin = Join-Path $target 'Contents/x86_64-win/EBMBasslineGenerator.vst3'
-          if (-not (Test-Path $bin -PathType Leaf)) { throw 'Missing Windows x64 module' }
-          Move-Item -LiteralPath $bin -Destination (Join-Path $target 'Contents/x86_64-win/125A EBM Bassline Generator.vst3')
-      - name: Steinberg Validator against real Windows VST3
+          $inner = Join-Path $target 'Contents/x86_64-win/EBMBasslineGenerator.vst3'
+          if (-not (Test-Path $inner -PathType Leaf)) { throw 'Missing compiled Windows x64 VST3 DLL' }
+          Move-Item -LiteralPath $inner -Destination (Join-Path $target 'Contents/x86_64-win/125A EBM Bassline Generator.vst3')
+          $resources = Join-Path $target 'Contents/Resources'
+          $ui = Join-Path $resources 'ebm.uidesc'
+          $logo = Join-Path $resources '125A_Logo_Master_FINAL.svg'
+          if (-not (Test-Path $ui -PathType Leaf)) { throw 'Missing editor UIDESC' }
+          if (-not (Test-Path $logo -PathType Leaf)) { throw 'Missing official 125A SVG' }
+          [xml]$doc = Get-Content -Raw -LiteralPath $ui
+          $view = $doc.DocumentElement.SelectSingleNode('./template[@name="EBMView"]')
+          if ($null -eq $view -or $view.GetAttribute('size') -ne '1100,590') { throw 'Wrong GUI root template or dimensions' }
+          foreach ($name in @('EbmPanel','EbmBrand')) {
+            if ($null -eq $view.SelectSingleNode('./view[@custom-view-name="'+$name+'"]')) { throw "Missing $name view" }
+          }
+          $expected=(Get-FileHash -Algorithm SHA256 'resource/125A_Logo_Master_FINAL.svg').Hash
+          $actual=(Get-FileHash -Algorithm SHA256 $logo).Hash
+          if ($expected -ne $actual) { throw '125A logo differs from repository master copy' }
+      - name: Steinberg Validator on native GUI bundle
         shell: pwsh
         run: |
           $validator = Get-ChildItem build-vst3 -Recurse -File -Filter 'validator.exe' |
@@ -61,10 +76,10 @@ jobs:
           if ($null -eq $validator) { throw 'Steinberg validator.exe missing' }
           $plugin = (Resolve-Path 'stage/125A EBM Bassline Generator.vst3').Path
           & $validator.FullName -e $plugin
-          if ($LASTEXITCODE -ne 0) { throw "VST3 Validator failed: $LASTEXITCODE" }
-      - name: Publish experimental bundle (NOT FINAL)
+          if ($LASTEXITCODE -ne 0) { throw "Steinberg Validator failed: $LASTEXITCODE" }
+      - name: Archive experimental GUI plugin (NOT FINAL)
         uses: actions/upload-artifact@v4
         with:
-          name: 125A-EBM-v0.2-EXPERIMENTAL-Windows-x64
+          name: 125A-EBM-v0.2-EXPERIMENTAL-GUI-Windows-x64
           path: stage/
           if-no-files-found: error

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vstgui-ui-description version="1">
+ <template name="EBMView" class="CViewContainer" origin="0,0" size="1100,590" transparent="false">
+  <view class="CView" custom-view-name="EbmPanel" origin="0,0" size="1100,590"/>
+  <view class="CView" custom-view-name="EbmBrand" origin="23,20" size="150,59" mouse-enabled="false"/>
+ </template>
+</vstgui-ui-description>
