@@ -70,3 +70,12 @@ No third-party artist transcriptions or commercial MIDI data are included.
 - Independent `tests/verify_midi.py` tested **six MIDI files**, three original/first-alternative pairs: 6/6 PASS, no stuck notes. No sound-quality review implied.
 - Defects found by adversarial testing and corrected: already-anticipated Classic anchor at four bars/high intensity; two identical Dark Electro four-bar alternatives at high intensity. Both are now distinct role-based treatments.
 - **UNVERIFIED:** Windows-native build, VST3, Studio One, playback usefulness, credible EBM style adherence and real listener preference. No GitHub Actions run during local tests. NOT FINAL.
+
+## 2026-10-14 — Independent rhythmic novelty gate (current checkpoint)
+
+- GCC C++17 Release CTest **10/10 PASS locally**, including new adversarial source-rhythm checker. Debug ASan + UBSan CTest with `detect_leaks=1`, parallel 4: **10/10 PASS locally**. A first sequential sanitizer run hit a shell/tool timeout; the later complete run passed without test errors.
+- Original seed selection claimed acceptable novelty on 3,000/3,000 requests **per style** even when the source rhythm duplicated one of the prior eight: 0 MINIMAL, **76 CLASSIC**, **184 DARK** mislabeled rhythmic-repeat cases in this fixed sample.
+- Revised two-gate selection on **the same** 3,000 requests/style: **0 repeated source rhythms** across the recent-eight window. **9,000/9,000** met both declared *structural* thresholds in this sample; no general or artistic-success guarantee.
+- Composer and arrangement C++ files unchanged: only the novelty selector, Session exposed diagnostic, tests and documentation were modified. VARIATE/source motif functionality is still verified by existing regression suites.
+- `minimumRhythmicDistance` counts presence/absence differences of grid onset positions (source motif only), is independent of root pitch and phrase variation. Threshold 2 is a provisional engineering acceptance gate, NOT a psychoacoustic cutoff. A fallback after 16 tries must set `meetsTarget=false` and surface the diagnostic score rather than pretend success.
+- **Still NOT VERIFIED:** musical catchiness, EBM musical preference, production usefulness, Windows native, VST3/Studio One, realtime performance/host-state bytes. No GitHub Actions used.

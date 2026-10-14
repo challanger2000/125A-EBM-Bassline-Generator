@@ -33,7 +33,8 @@ GenerateInfo Session::generate() {
     if(nextHistory.size()>kMaximumHistory)nextHistory.erase(nextHistory.begin());
     auto nextCurrent=std::move(outcome.composition);
     const GenerateInfo info{chosen.seed,outcome.candidatesEvaluated,
-                            outcome.minimumDistance,outcome.meetsTarget};
+                            outcome.minimumDistance,outcome.minimumRhythmicDistance,
+                            outcome.meetsRhythmicTarget,outcome.meetsTarget};
     options_.seed=chosen.seed+1ULL; // uint64 overflow is defined modulo 2^64.
     history_.swap(nextHistory);
     current_=std::move(nextCurrent);

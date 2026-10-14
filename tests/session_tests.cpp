@@ -33,6 +33,8 @@ int main() {
             CHECK(info.selectedSeed==session.current().settings.seed);
             CHECK(info.candidatesEvaluated>=1&&info.candidatesEvaluated<=16);
             CHECK(info.minimumDistance>=0);
+            CHECK(info.minimumRhythmicDistance>=0);
+            if(info.meetsNoveltyTarget)CHECK(info.meetsRhythmicTarget);
             if(info.meetsNoveltyTarget)++strictNovel;
             chosenSeeds.insert(info.selectedSeed);
             const auto generated=session.current();
@@ -82,6 +84,7 @@ int main() {
             const auto a=session.generate(),b=replay.generate();
             CHECK(a.selectedSeed==b.selectedSeed);
             CHECK(a.meetsNoveltyTarget==b.meetsNoveltyTarget);
+            CHECK(a.minimumRhythmicDistance==b.minimumRhythmicDistance);
             CHECK(a.candidatesEvaluated==b.candidatesEvaluated);
             CHECK(toMidi(render(session.current()))==toMidi(render(replay.current())));
         }

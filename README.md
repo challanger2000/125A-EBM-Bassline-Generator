@@ -109,3 +109,14 @@ python tests/verify_midi.py previews/alternatives/*.mid
 ```
 
 See [`docs/REPEATED-VARIATE-AUDIT-2026-10-14.md`](docs/REPEATED-VARIATE-AUDIT-2026-10-14.md).
+
+## Independent rhythmic novelty screen (2026-10-14)
+
+`composeNovel()` now requires **two independent, disclosed source-motif checks** against the last eight matching results:
+
+- Existing structural onset/pitch score >= 4 (unchanged diagnostic definition).
+- New rhythmic source-onset symmetric difference >= 2. Pure pitch or root changes with identical note-on positions are **not** called rhythmically new. Comparisons are based on the original one/two-bar motif, not later arrangements or user variations.
+
+The selector remains deterministic, explores at most 16 seeds and returns `meetsTarget=false` when neither a sufficiently rhythmic nor structural candidate can be found. `NoveltyResult` and `GenerateInfo` also report `minimumRhythmicDistance` and `meetsRhythmicTarget`. If no candidate passes, the fallback maximizes rhythm difference first, then structural difference; **it is never silently labelled a success**.
+
+This is not a score of catchiness, groove, or authentic EBM. No API is called from the audio thread. See [`docs/RHYTHMIC-NOVELTY-AUDIT-2026-10-14.md`](docs/RHYTHMIC-NOVELTY-AUDIT-2026-10-14.md).

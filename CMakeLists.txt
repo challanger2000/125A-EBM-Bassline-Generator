@@ -101,3 +101,15 @@ endif()
 
 add_executable(ebm_alternative_demo tools/ebm_alternative_demo.cpp)
 target_link_libraries(ebm_alternative_demo PRIVATE ebm_core)
+
+# Independent negative cases for rhythm-blind seed novelty and fallback semantics.
+if(BUILD_TESTING)
+    add_executable(ebm_rhythmic_novelty_tests tests/rhythmic_novelty_tests.cpp)
+    target_link_libraries(ebm_rhythmic_novelty_tests PRIVATE ebm_core)
+    if(MSVC)
+        target_compile_options(ebm_rhythmic_novelty_tests PRIVATE /W4 /WX)
+    else()
+        target_compile_options(ebm_rhythmic_novelty_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME EBM_Independent_Rhythmic_Novelty COMMAND ebm_rhythmic_novelty_tests)
+endif()

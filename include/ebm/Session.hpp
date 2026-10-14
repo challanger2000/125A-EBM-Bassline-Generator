@@ -19,6 +19,8 @@ struct GenerateInfo {
     std::uint64_t selectedSeed = 0;
     int candidatesEvaluated = 0;
     int minimumDistance = 0;
+    int minimumRhythmicDistance = 0;
+    bool meetsRhythmicTarget = false;
     bool meetsNoveltyTarget = false;
 };
 class Session {
