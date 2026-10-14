@@ -8,7 +8,7 @@ The engine develops original monophonic MIDI phrases using musical *roles* inste
 
 - `MINIMAL_BODY`: one-bar pedal, active rests, upper answer, either an intentional rest, a tonic pickup, or (in CROSS_PULSE) a chromatic return to the next bar. Eight exact repeats are allowed at VARIATION=0.
 - `CLASSIC_EBM`: two-bar motor/response, deliberate pickups, optional fifth-degree pedal move, structured omission and anticipation.
-- `DARK_ELECTRO`: two-bar contour question/answer, a targeted chromatic approach, optional phrase-end breathing, stable resolutions, rhythm-preserving answer variation.
+- `DARK_ELECTRO`: two-bar contour question/answer, a targeted chromatic approach, optional phrase-end breathing, stable resolutions and scale-constrained responses whose upper contour rises above the next target. This last behavior was verified in the 2026-10-14 tonal audit.
 
 Each profile now exposes three **different musical source devices**, with named structural invariants and rejection tests: `PEDAL_GAP` / `DELAYED_BACKBEAT` / `CROSS_PULSE`; `MOTOR_LOCK` / `BREAK_AND_SHOUT` / `OCTAVE_INTERLOCK`; `CLIMB_RELEASE` / `LATE_SUSPENSION` / `BROKEN_ANSWER`. The devices are engine-internal research concepts, not yet user-facing options or authentic recreations of a particular band. The source-motif rhythm and every bar's device label are checked for consistency.
 
@@ -19,7 +19,7 @@ Configuration: root MIDI 24–60, 4 or 8 bars in 4/4, deterministic seed, variat
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure  # four local suites
+ctest --test-dir build -C Release --output-on-failure  # five local suites
 ```
 
 For three optional diagnostic examples (not a 90-file listening assignment):
@@ -37,6 +37,7 @@ Windows multi-config generators generally place the CLI at `build/Release/ebm_pr
 - Implemented architecture and caveats: [`docs/ENGINE-IMPLEMENTATION-v0.2.md`](docs/ENGINE-IMPLEMENTATION-v0.2.md)
 - Musical phrase-ending audit: [`docs/PHRASE-ENDINGS-AUDIT-2026-10-13.md`](docs/PHRASE-ENDINGS-AUDIT-2026-10-13.md)
 - New compositional breadth audit: [`docs/GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md`](docs/GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md)
+- Dark Electro tonal-direction audit: [`docs/TONAL-CONTOUR-AUDIT-2026-10-14.md`](docs/TONAL-CONTOUR-AUDIT-2026-10-14.md)
 - Motif-lineage regression: [`docs/MOTIF-LINEAGE-AUDIT-2026-10-13.md`](docs/MOTIF-LINEAGE-AUDIT-2026-10-13.md)
 - Test evidence: [`docs/QA-STATUS.md`](docs/QA-STATUS.md) and [quality audit](docs/QUALITY-AUDIT-2026-10-13.md)
 

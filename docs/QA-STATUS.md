@@ -1,8 +1,8 @@
 # 125A EBM musical engine v0.2 grammar and phrase-ending correction — 2026-10-13
 
-**Status: local technical checks PASS; musical quality still NOT VERIFIED; NOT FINAL.**
+**Status (2026-10-14): local tonal-contract technical checks PASS; musical quality still NOT VERIFIED; NOT FINAL.**
 
-Latest: [motif-lineage proof](MOTIF-LINEAGE-AUDIT-2026-10-13.md). Previous A/B listening stimuli remain available, but no listening judgement is claimed.
+Latest: [dark tonal-direction audit](TONAL-CONTOUR-AUDIT-2026-10-14.md) (new fifth test group). Before that: [motif-lineage proof](MOTIF-LINEAGE-AUDIT-2026-10-13.md). Previous A/B listening stimuli remain available, but no listening judgement is claimed.
 
 See [phrase-ending audit](PHRASE-ENDINGS-AUDIT-2026-10-13.md) for the latest controlled cadence/rest evidence and counterexamples.
 
@@ -23,6 +23,9 @@ See [grammar vocabulary audit](GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md) for contr
 | Native Windows build and DAW/VST3 | **NOT IMPLEMENTED / NOT VERIFIED** |
 | Steinberg Validator / 125A Tester | NOT APPLICABLE to current standalone engine |
 | GitHub Actions | NOT RUN; preserving limited CI budget |
+| New directed Dark Electro tonal contract (local test fixture) | **5/5** CTest Release and **5/5** ASan/UBSan; 4,000 targeted generated cases, 3 adversarial mutations rejected |
+| Unaffected style preservation, 2,500 configurations each | **Minimal and Classic byte-identical before/after** |
+| Dark original vs revised, 1,000 seed diagnosis | Unmotivated upper pitch: **119 -> 0**; un-rising summit: **122 -> 0** |
 | Release | NOT READY |
 
 No third-party artist transcriptions or commercial MIDI data are included.

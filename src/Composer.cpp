@@ -231,8 +231,14 @@ std::pair<Bar,Bar> dark(Rng& rng) {
             break;
     }
     const int targetPitch=rng.among({3,5,7});
-    const int summit=rng.among({7,10,12});
-    const int upperAnswer=std::max(targetPitch+2,rng.among({7,10,12}));
+    // Natural-minor contour with a named destination. The upper voice must
+    // rise ABOVE its later target instead of accidentally remaining level.
+    const int candidateSummit=rng.among({7,10,12});
+    const int summit=candidateSummit>targetPitch?candidateSummit:10;
+    // The answering bar uses an explicitly selected scale tone, never an
+    // arithmetic max() that can invent a major sixth (+9) in this minor idiom.
+    const int candidateAnswer=rng.among({7,10,12});
+    const int upperAnswer=candidateAnswer>targetPitch?candidateAnswer:10;
     a.notes={make(1,0,0,Role::Anchor,117,3),
              make(2,earlyStep,3,Role::Answer,101,2),
              make(3,climbStep,summit,Role::Drive,107),
@@ -321,7 +327,7 @@ Composition compose(const Config& cfg) {
             answer(out,3,107,old==7?12:7);
         } else {
             const int old=byId(out.bars[3],102).interval;
-            answer(out,3,102,old==7?10:7);
+            answer(out,3,102,old==10?12:10);
         }
     }
     if(cfg.variation>=25) {
@@ -350,7 +356,7 @@ Composition compose(const Config& cfg) {
         } else {
             if(cfg.bars==8) {
                 const int old=byId(out.bars[7],102).interval;
-                answer(out,7,102,old==7?10:7);
+                answer(out,7,102,old==10?12:10);
             } else {
                 // Already altered B in bar 4; modify its contour without
                 // adding notes or compromising the original first two bars.
@@ -506,6 +512,11 @@ void validate(const Composition& c) {
             }
         } else {
             const auto& resolution=sourceEvent(sourceA,5);
+            const auto& summit=sourceEvent(sourceA,3);
+            const auto& firstTarget=sourceEvent(sourceB,101);
+            requireDevice(summit.role==Role::Drive &&
+                          firstTarget.role==Role::Resolution &&
+                          summit.interval>firstTarget.interval);
             const auto& answer=sourceEvent(sourceB,104);
             const auto& lowAnchor=sourceEvent(sourceB,105);
             requireDevice(resolution.role==Role::Resolution && answer.role==Role::Answer &&
@@ -533,6 +544,27 @@ void validate(const Composition& c) {
             throw std::invalid_argument("device incompatible with chosen style");
         if(index>0 && b.device!=c.bars.front().device)
             throw std::invalid_argument("device switched within composed phrase");
+        if(c.settings.style==Style::DarkElectro) {
+            // This PROVISIONAL grammar is explicitly natural-minor anchored;
+            // notes outside the palette are allowed only as tagged chromatic
+            // TENSION with a resolvable target checked below.
+            constexpr std::array<int,6> palette{{0,3,5,7,10,12}};
+            for(const Event& event:b.notes) {
+                if(event.role!=Role::Tension &&
+                   std::find(palette.begin(),palette.end(),event.interval)==palette.end())
+                    throw std::invalid_argument("unmotivated dark-electro chromatic pitch");
+            }
+            if(b.motif=='B') {
+                const auto targetIt=std::find_if(b.notes.begin(),b.notes.end(),
+                    [](const Event& event){return event.id==101;});
+                const auto answerIt=std::find_if(b.notes.begin(),b.notes.end(),
+                    [](const Event& event){return event.id==102;});
+                if(targetIt==b.notes.end()||answerIt==b.notes.end()||
+                   targetIt->role!=Role::Resolution||answerIt->role!=Role::Answer||
+                   answerIt->interval<=targetIt->interval)
+                    throw std::invalid_argument("dark-electro answer does not rise above target");
+            }
+        }
         if(b.notes.empty()||(b.motif!='A' && b.motif!='B'))throw std::invalid_argument("invalid motif");
         int nextFree=0;bool hasAnchor=false;
         for(const auto& e:b.notes) {
