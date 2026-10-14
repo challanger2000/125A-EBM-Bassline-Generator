@@ -204,5 +204,17 @@ if(EBM_ENABLE_VST3)
         target_sources(EBMBasslineGenerator PRIVATE
             "${vst3sdk_SOURCE_DIR}/public.sdk/source/main/dllmain.cpp")
     endif()
+    # Independent SDK-hosted probe of the real Windows .vst3 (not just source-level tests).
+    if(WIN32)
+        add_executable(EBMHostProbe
+            tests/vst3_host_probe.cpp
+            "${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/hosting/module_win32.cpp"
+            "${vst3sdk_SOURCE_DIR}/public.sdk/source/common/memorystream.cpp"
+            "${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/hosting/eventlist.cpp"
+            "${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/hosting/parameterchanges.cpp")
+        target_link_libraries(EBMHostProbe PRIVATE
+            ebm_core sdk_hosting sdk_common base pluginterfaces user32 ole32)
+        target_compile_definitions(EBMHostProbe PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
     smtg_target_configure_version_file(EBMBasslineGenerator)
 endif()

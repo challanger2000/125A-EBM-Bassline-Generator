@@ -10,6 +10,7 @@ on:
       - 'include/ebm/HostBridge.hpp'
       - 'tests/host_bridge_tests.cpp'
       - 'tests/gui_policy_tests.cpp'
+      - 'tests/vst3_host_probe.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-vst3.yml'
   workflow_dispatch:
@@ -68,6 +69,18 @@ jobs:
           $expected=(Get-FileHash -Algorithm SHA256 'resource/125A_Logo_Master_FINAL.svg').Hash
           $actual=(Get-FileHash -Algorithm SHA256 $logo).Hash
           if ($expected -ne $actual) { throw '125A logo differs from repository master copy' }
+      - name: Build native independent VST3 GUI/Controller/Processor host probe
+        shell: pwsh
+        run: cmake --build build-vst3 --config Release --parallel 4 --target EBMHostProbe
+      - name: Verify native message routing and five editor lifecycles
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $exe = Join-Path (Resolve-Path 'build-vst3/Release').Path 'EBMHostProbe.exe'
+          if (-not (Test-Path $exe -PathType Leaf)) { throw 'EBMHostProbe.exe missing' }
+          $plugin = (Resolve-Path 'stage/125A EBM Bassline Generator.vst3').Path
+          & $exe $plugin
+          if ($LASTEXITCODE -ne 0) { throw "Native VST3 host probe failed: $LASTEXITCODE" }
       - name: Steinberg Validator on native GUI bundle
         shell: pwsh
         run: |
