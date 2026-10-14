@@ -1,0 +1,197 @@
+#include "ebm/HostBridge.hpp"
+#include <algorithm>
+#include <utility>
+#include <stdexcept>
+
+namespace ebm::host {
+namespace {
+using Bytes=DocumentBytes;
+void put8(Bytes& out,std::size_t& i,std::uint8_t x) noexcept {out[i++]=x;}
+void put32(Bytes& out,std::size_t& i,std::uint32_t x) noexcept {
+    for(int n=0;n<4;++n)put8(out,i,static_cast<std::uint8_t>(x>>(8*n)));
+}
+void put64(Bytes& out,std::size_t& i,std::uint64_t x) noexcept {
+    for(int n=0;n<8;++n)put8(out,i,static_cast<std::uint8_t>(x>>(8*n)));
+}
+std::uint8_t get8(const std::uint8_t* data,std::size_t& i) noexcept {return data[i++];}
+std::uint32_t get32(const std::uint8_t* data,std::size_t& i) noexcept {
+    std::uint32_t x=0;for(int n=0;n<4;++n)x|=std::uint32_t(get8(data,i))<<(8*n);return x;
+}
+std::uint64_t get64(const std::uint8_t* data,std::size_t& i) noexcept {
+    std::uint64_t x=0;for(int n=0;n<8;++n)x|=std::uint64_t(get8(data,i))<<(8*n);return x;
+}
+std::uint32_t checksum(const std::uint8_t* src,std::size_t count) noexcept {
+    std::uint32_t hash=2166136261u;
+    for(std::size_t i=0;i<count;++i){hash^=src[i];hash*=16777619u;}
+    return hash;
+}
+void storeConfig(Bytes& b,std::size_t& i,const Config& c) noexcept {
+    put8(b,i,static_cast<std::uint8_t>(c.style));
+    put8(b,i,static_cast<std::uint8_t>(c.bars));
+    put8(b,i,static_cast<std::uint8_t>(c.rootMidi));
+    put8(b,i,static_cast<std::uint8_t>(c.variation));
+    put64(b,i,c.seed);
+}
+Config loadConfig(const std::uint8_t* b,std::size_t& i) noexcept {
+    Config c{};c.style=static_cast<Style>(get8(b,i));c.bars=get8(b,i);
+    c.rootMidi=get8(b,i);c.variation=get8(b,i);c.seed=get64(b,i);return c;
+}
+bool validModel(const Document& d) {
+    if(d.mode!=live::Mode::Transport && d.mode!=live::Mode::MidiNote)return false;
+    v2::Session tmp;
+    tmp.restore(d.session); // Full semantic and lineage consistency.
+    return true;
+}
+} // namespace
+
+bool encode(const Document& source,DocumentBytes& target) noexcept {
+    try {
+        if(source.session.history.size()>kMaximumHistory || !validModel(source))return false;
+        DocumentBytes fresh{};
+        std::size_t i=0;
+        for(char c: {'E','B','M','1'})put8(fresh,i,static_cast<std::uint8_t>(c));
+        put32(fresh,i,1);
+        storeConfig(fresh,i,source.session.options);
+        put8(fresh,i,source.session.hasCurrent?1:0);
+        storeConfig(fresh,i,source.session.hasCurrent?source.session.current:Config{});
+        put8(fresh,i,static_cast<std::uint8_t>(source.session.alternative));
+        put8(fresh,i,static_cast<std::uint8_t>(source.session.history.size()));
+        put8(fresh,i,static_cast<std::uint8_t>(source.mode));
+        for(const auto& c:source.session.history)storeConfig(fresh,i,c);
+        while(i<kDocumentBytes-4)put8(fresh,i,0);
+        put32(fresh,i,checksum(fresh.data(),kDocumentBytes-4));
+        if(i!=kDocumentBytes)return false;
+        target=fresh;return true;
+    }catch(...) {return false;}
+}
+bool decode(const std::uint8_t* bytes,std::size_t count,Document& dest) noexcept {
+    if(!bytes || count!=kDocumentBytes)return false;
+    try {
+        std::size_t i=0;
+        if(get8(bytes,i)!='E'||get8(bytes,i)!='B'||get8(bytes,i)!='M'||
+           get8(bytes,i)!='1'||get32(bytes,i)!=1)return false;
+        Document candidate{};
+        candidate.session.version=2;
+        candidate.session.options=loadConfig(bytes,i);
+        const auto has=get8(bytes,i);
+        if(has>1)return false;
+        candidate.session.hasCurrent=has==1;
+        const Config storedCurrent=loadConfig(bytes,i);
+        candidate.session.current=storedCurrent;
+        const auto alt=get8(bytes,i),len=get8(bytes,i),mode=get8(bytes,i);
+        if(len>kMaximumHistory || mode>1 || alt>4)return false;
+        candidate.session.alternative=alt;
+        candidate.mode=static_cast<live::Mode>(mode);
+        candidate.session.history.reserve(len);
+        for(unsigned n=0;n<len;++n)candidate.session.history.push_back(loadConfig(bytes,i));
+        // Strict canonical tail: unused slots may not smuggle state.
+        while(i<kDocumentBytes-4)if(get8(bytes,i)!=0)return false;
+        if(get32(bytes,i)!=checksum(bytes,kDocumentBytes-4) || i!=count)return false;
+        if(!candidate.session.hasCurrent) {
+            // Canonical no-current fields were all 0 except Config defaults.
+            if(storedCurrent.style!=Style::ClassicEBM || storedCurrent.bars!=8 ||
+               storedCurrent.rootMidi!=36 || storedCurrent.seed!=1 ||
+               storedCurrent.variation!=30)return false;
+        }
+        if(!validModel(candidate))return false;
+        dest=std::move(candidate);return true;
+    }catch(...) {return false;}
+}
+
+bool PatternExchange::publish(const live::Pattern& source) noexcept {
+    if(!source.ready || (source.bars!=4&&source.bars!=8) ||
+       source.lengthSteps!=source.bars*16)return false;
+    std::lock_guard<std::mutex> guard(writerMutex_);
+    for(int i=0;i<3;++i){
+        int expected=Free;
+        if(!slots_[static_cast<std::size_t>(i)].status.compare_exchange_strong(
+            expected,Writing,std::memory_order_acq_rel))continue;
+        slots_[static_cast<std::size_t>(i)].data=source;
+        slots_[static_cast<std::size_t>(i)].status.store(Ready,std::memory_order_release);
+        const int discarded=pending_.exchange(i,std::memory_order_acq_rel);
+        if(discarded>=0){
+            int oldExpected=Ready;
+            (void)slots_[static_cast<std::size_t>(discarded)].status.compare_exchange_strong(
+                oldExpected,Free,std::memory_order_acq_rel);
+        }
+        return true;
+    }
+    return false;
+}
+const live::Pattern* PatternExchange::acquire(std::uint64_t& revision) noexcept {
+    const int candidate=pending_.exchange(-1,std::memory_order_acq_rel);
+    if(candidate>=0){
+        int expected=Ready;
+        if(slots_[static_cast<std::size_t>(candidate)].status.compare_exchange_strong(
+           expected,Reading,std::memory_order_acq_rel)){
+            const int previous=active_;
+            active_=candidate;
+            ++revision_;
+            if(previous>=0)slots_[static_cast<std::size_t>(previous)].status.store(
+                Free,std::memory_order_release);
+        }
+    }
+    revision=revision_;
+    return active_<0?nullptr:&slots_[static_cast<std::size_t>(active_)].data;
+}
+Model::Model(){
+    // Default is ready for a transport test even before a GUI exists.
+    v2::Session prepared;
+    (void)prepared.generate();
+    if(!publishSession(prepared))throw std::logic_error("default EBM pattern unavailable");
+    session_=std::move(prepared);
+}
+bool Model::publishSession(const v2::Session& chosen) {
+    const int bars=chosen.options().bars;
+    Phrase phrase{bars,{}};
+    if(chosen.hasCurrent())phrase=v2::render(chosen.current());
+    live::Pattern compiled;
+    return live::prepare(phrase,compiled) && patterns_.publish(compiled);
+}
+bool Model::restore(const Document& doc) {
+    std::lock_guard<std::mutex> guard(documentMutex_);
+    try {
+        if(!validModel(doc))return false;
+        v2::Session next;
+        next.restore(doc.session);
+        if(!publishSession(next))return false;
+        session_=std::move(next);
+        mode_.store(doc.mode,std::memory_order_release);
+        return true;
+    }catch(...) {return false;}
+}
+Document Model::snapshot() const {
+    std::lock_guard<std::mutex> guard(documentMutex_);
+    return Document{session_.snapshot(),mode_.load(std::memory_order_acquire)};
+}
+bool Model::generate(){
+    std::lock_guard<std::mutex> guard(documentMutex_);
+    try { auto next=session_;(void)next.generate();
+        if(!publishSession(next))return false;
+        session_=std::move(next);
+        return true;
+    }catch(...) {return false;}
+}
+bool Model::variate(int intensity){
+    std::lock_guard<std::mutex> guard(documentMutex_);
+    try {auto next=session_;if(!next.variate(intensity))return false;
+        if(!publishSession(next))return false;
+        session_=std::move(next);
+        return true;
+    }catch(...) {return false;}
+}
+bool Model::nextVariant(){
+    std::lock_guard<std::mutex> guard(documentMutex_);
+    try {auto next=session_;if(!next.nextVariant())return false;
+        if(!publishSession(next))return false;
+        session_=std::move(next);
+        return true;
+    }catch(...) {return false;}
+}
+void Model::setMode(live::Mode mode) noexcept {
+    if(mode==live::Mode::Transport||mode==live::Mode::MidiNote)
+        mode_.store(mode,std::memory_order_release);
+}
+live::Mode Model::mode() const noexcept {return mode_.load(std::memory_order_acquire);}
+void Model::resetRuntime() noexcept {runtime_.reset();}
+} // namespace ebm::host

@@ -153,3 +153,41 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME EBM_Live_MIDI_Scheduler COMMAND ebm_live_midi_tests)
 endif()
+
+# VST3: generate/session actions are CONTROL-THREAD ONLY; live scheduler is bounded.
+target_sources(ebm_core PRIVATE src/HostBridge.cpp)
+set_target_properties(ebm_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(BUILD_TESTING)
+    add_executable(ebm_host_bridge_tests tests/host_bridge_tests.cpp)
+    target_link_libraries(ebm_host_bridge_tests PRIVATE ebm_core)
+    if(MSVC)
+        target_compile_options(ebm_host_bridge_tests PRIVATE /W4 /WX)
+    else()
+        target_compile_options(ebm_host_bridge_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME EBM_VST3_Host_Bridge_Contract COMMAND ebm_host_bridge_tests)
+endif()
+
+option(EBM_ENABLE_VST3 "Build experimental MIDI-only VST3 without GUI" OFF)
+if(EBM_ENABLE_VST3)
+    set(SMTG_RUN_VST_VALIDATOR OFF CACHE BOOL "" FORCE)
+    set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
+    set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES ON CACHE BOOL "" FORCE)
+    set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+    include(FetchContent)
+    FetchContent_Declare(vst3sdk
+        GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
+        GIT_TAG v3.8.1_build_84
+        GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(vst3sdk)
+    smtg_add_vst3plugin(EBMBasslineGenerator
+        src/vst3/Plugin.cpp src/vst3/Plugin.hpp)
+    target_link_libraries(EBMBasslineGenerator PRIVATE sdk ebm_core)
+    target_include_directories(EBMBasslineGenerator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    if(WIN32)
+        target_sources(EBMBasslineGenerator PRIVATE
+            "${vst3sdk_SOURCE_DIR}/public.sdk/source/main/dllmain.cpp")
+    endif()
+    smtg_target_configure_version_file(EBMBasslineGenerator)
+endif()
