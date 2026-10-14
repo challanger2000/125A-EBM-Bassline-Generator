@@ -20,7 +20,9 @@ struct GenerateInfo {
     int candidatesEvaluated = 0;
     int minimumDistance = 0;
     int minimumRhythmicDistance = 0;
+    int minimumCoreRhythmicDistance = 0;
     bool meetsRhythmicTarget = false;
+    bool meetsCoreRhythmicTarget = false;
     bool meetsNoveltyTarget = false;
 };
 class Session {
