@@ -57,6 +57,10 @@ struct Composition {
 };
 // Independent stylistic grammars compose original event relationships.
 Composition compose(const Config& config);
+// A bounded set of intentional, independently auditable treatments of the SAME
+// source cell. 0 is the unaltered selected variation level; 1..4 each adds one
+// role-based edit to an untouched downstream bar or response. Not realtime-safe.
+Composition composeAlternative(const Config& config, int alternative);
 Phrase render(const Composition& composition);
 // Throws std::invalid_argument for a broken musical contract.
 void validate(const Composition& composition);

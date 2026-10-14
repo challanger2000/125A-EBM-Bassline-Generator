@@ -407,6 +407,62 @@ Composition compose(const Config& cfg) {
     validate(out);
     return out;
 }
+// Repeated VARIATE must not swap the underlying source idea or scatter unrelated
+// random notes. These four alternative phrase treatments keep the selected seed,
+// the source A(/B) cell, the grammar, and the existing intensity-level edits.
+// The strict verifier below independently replays each newly logged edit.
+Composition composeAlternative(const Config& cfg,int alternative) {
+    if(alternative<0 || alternative>4)
+        throw std::invalid_argument("alternative index must be 0..4");
+    Composition out=compose(cfg);
+    if(alternative==0)return out;
+    if(cfg.variation==0)
+        throw std::invalid_argument("0% is neutral; choose an intensity before VARIATE");
+    const int final=cfg.bars-1;
+    const auto swapAnswer=[&](int bar,int id,int first,int second) {
+        const int old=byId(out.bars[static_cast<std::size_t>(bar)],id).interval;
+        // Both destinations are chosen scale/role-compatible response tones;
+        // unlike arithmetic transposition these do not invent chromatic notes.
+        answer(out,bar,id,old==first?second:first);
+    };
+    switch(alternative) {
+        case 1: // Rephrase the ending; leave its rhythm and anchors intact.
+            if(cfg.style==Style::MinimalBody)swapAnswer(final,5,7,5);
+            else if(cfg.style==Style::ClassicEBM)swapAnswer(final,107,7,12);
+            else swapAnswer(final,102,10,12);
+            break;
+        case 2: // Mid-phrase question/response instead of a last-bar flourish.
+            if(cfg.style==Style::MinimalBody)
+                swapAnswer(cfg.bars==8?5:2,5,7,5);
+            else if(cfg.style==Style::ClassicEBM)
+                swapAnswer(2,2,7,12);
+            else swapAnswer(2,2,3,5);
+            break;
+        case 3: // Remove a named optional drive to create a deliberate gap.
+            if(cfg.style==Style::MinimalBody)omit(out,1,3);
+            else if(cfg.style==Style::ClassicEBM) {
+                if(cfg.bars==4 && cfg.variation>=25)swapAnswer(3,102,3,5);
+                else omit(out,cfg.bars==8?5:3,106);
+            } else {
+                if(cfg.bars==4 && cfg.variation>=50)swapAnswer(3,104,3,5);
+                else omit(out,3,103);
+            }
+            break;
+        case 4: // Anticipate a selected later anchor; explicitly vacate its old slot.
+            if(cfg.style==Style::MinimalBody)anticipate(out,1,4);
+            else if(cfg.style==Style::ClassicEBM) {
+                // At 4 bars and intensity >=50 this anchor was already advanced
+                // by the canonical phrase arc. Do not "anticipate" a Pickup twice.
+                if(cfg.bars==4 && cfg.variation>=50)swapAnswer(2,7,5,7);
+                else anticipate(out,2,6);
+            }
+            else anticipate(out,3,105);
+            break;
+        default:break;
+    }
+    validate(out);
+    return out;
+}
 // Independent event-lineage audit. A later bar is legally derived only by
 // replaying its explicit operations against the untouched A or B source motif.
 // This deliberately does NOT use the mutation helpers above, so the check

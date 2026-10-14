@@ -42,3 +42,31 @@ No third-party artist transcriptions or commercial MIDI data are included.
 - Paired source-to-output audit across **7,200 identical configurations**: **5,600 exact matches**; **1,600 high-intensity Classic/Dark phrases differ only in precisely two last-bar velocities**. All note onsets, pitches, gates, counts are unchanged. The source motifs remain untouched.
 - Four independent MIDI examples (2 styles × old/new): checked against the standard MIDI parser, **4/4 PASS**. Four WAV previews 44.1 kHz 16-bit mono, same drum accompaniment and sample-aligned timing; **4/4 byte-identical on repeat rendering**. These are laboratory audition materials only.
 - **NOT VERIFIED:** subjective improvement in groove, EBM authenticity, perceptual loudness matching, Windows/Studio One/VST3 and host lifecycle. GitHub Actions **not run**. No musical/production release PASS.
+
+## 2026-10-14 — Offline GENERATE / Variation-level session
+
+- GCC C++17 Release: 8/8 CTest PASS locally, including the new
+  `EBM_Generate_Variate_Session` test (1,440 counted consecutive Generate
+  iterations, 4,320 intended variation reversals, and 1,440 verified
+  value-state save/reloads across all three styles, 4/8 bars, fixed seeds).
+- ASan+UBSan Debug: 8/8 CTest PASS locally with leak detection enabled.
+- New regressions: selected-seed retention; source-motif identity after
+  variation; 0%-to-85%-to-0% exact MIDI restoration; seven-semitone transpose
+  and return; recent-history bound of 48; 5-next-GENERATE project-state replay;
+  invalid state/setting rejection without modifying the last valid riff;
+  style/length context reset; no-change reporting on repeated intensity.
+- `ebm_session_demo` generated three 8-bar MIDI examples via the session,
+  independently parsed with `tests/verify_midi.py`: 3/3 PASS.
+- No claim of continuous variation, new alternative on repeated VARIATE click,
+  subjective musical benefit, Windows-native testing, VST3 host/state API,
+  Studio One, validator or release. No GitHub Actions run.
+
+## 2026-10-14 — Repeated VARIATE with preserved source motif
+
+- GCC C++17 Linux Release: **9/9 CTest PASS**; Debug ASan/UBSan with leak detection: **9/9 PASS**.
+- Added `EBM_Repeat_Variate_Alternatives`: **6,600** tested composition alternatives across 3 profiles × 2 lengths × 55 seeds × 4 nonzero intensity bands × 5 treatments. All five MIDI outputs are distinct per case; source bars, seed and musical lineage remain fixed.
+- New Session tests include **5,280 repeated VARIATE transitions**, **6,600 save/restore and invalid-state checks**, exact transposition and return, state-v1-to-v2 migration, strict 0% neutral behavior and explicit `variate(level)` reset to the canonical arrangement.
+- Unmodified `compose()` baseline: **3,000 existing MIDI outputs matched byte-for-byte** before and after the change. FNV-1a 64-bit on concatenated MIDI bytes: `2516969645277329636` in both builds.
+- Independent `tests/verify_midi.py` tested **six MIDI files**, three original/first-alternative pairs: 6/6 PASS, no stuck notes. No sound-quality review implied.
+- Defects found by adversarial testing and corrected: already-anticipated Classic anchor at four bars/high intensity; two identical Dark Electro four-bar alternatives at high intensity. Both are now distinct role-based treatments.
+- **UNVERIFIED:** Windows-native build, VST3, Studio One, playback usefulness, credible EBM style adherence and real listener preference. No GitHub Actions run during local tests. NOT FINAL.

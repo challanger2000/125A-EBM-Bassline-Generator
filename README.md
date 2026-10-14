@@ -46,3 +46,66 @@ Windows multi-config generators generally place the CLI at `build/Release/ebm_pr
 - Test evidence: [`docs/QA-STATUS.md`](docs/QA-STATUS.md) and [quality audit](docs/QUALITY-AUDIT-2026-10-13.md)
 
 Guidance: `challanger2000/125A-Engineering/START-HERE.md` and relevant standards. `main` is unchanged. v0.1 remains recoverable from Git history, but is **not** the accepted composition model.
+
+## Offline GENERATE / Variation-level session (2026-10-14)
+
+`ebm::v2::Session` is a standalone **control-thread-only** coordinator in
+`include/ebm/Session.hpp`, not VST3, not realtime-safe, and not an audio callback.
+It connects the existing motif composer and bounded novelty selector to a
+reproducible generation workflow:
+
+- `generate()` selects a source motif against the remembered recent results,
+  retains the **actually selected seed** and returns its candidate count and
+  `meetsNoveltyTarget` status. No guarantee of musical quality or uniqueness.
+- `variate(level)` changes **the arrangement of the current source motif** without
+  reselecting the seed. The range 0..100 still comprises five discrete levels;
+  asking for the same effective level returns `false` instead of falsely
+  claiming to create a new variation. `nextVariant()` separately cycles through
+  four deliberate answer/omission/anticipation treatments and the canonical
+  phrase without replacing the selected motif seed. At 0%, `nextVariant()`
+  correctly does nothing; it never secretly changes intensity.
+- `setRootMidi()` transposes the same composed pattern. Style/length changes
+  intentionally require a fresh GENERATE; `clearCurrent()` retains history.
+- `snapshot()` / `restore()` roundtrip the selected seed and up to 48 previous
+  generation contexts, the selected alternative cursor, and atomic validation
+  before restoring live state. Value-state schema v2 accepts valid v1 snapshots
+  as canonical alternative 0; no binary VST3 state has been defined.
+  The structure is a **local value snapshot**, not a finalized binary VST3
+  preset/project schema.
+
+Produce three inspectable eight-bar standard MIDI files (120 BPM, 4/4):
+
+```sh
+./build/ebm_session_demo previews/session
+python tests/verify_midi.py previews/session/*.mid
+```
+
+Details, regression evidence, limitations and open gates:
+[`docs/GENERATE-VARIATE-SESSION-AUDIT-2026-10-14.md`](docs/GENERATE-VARIATE-SESSION-AUDIT-2026-10-14.md).
+
+## Repeated VARIATE button (2026-10-14, offline prototype)
+
+- `Session::nextVariant()` cycles the **same chosen seed** through five inspectably
+  different outputs at a nonzero intensity: canonical arrangement plus four
+  explicitly logged musical changes (final answer, midphrase answer, omitted
+  drive/alternative answer, and anticipation/response where needed).
+- The first one/two source bars, style, key, phrase length and original motif
+  remain locked. `validate()` independently reconstructs variations from
+  typed edit records, rejecting unrelated changes or unsafe timings.
+- At **0%**, VARIATE is neutral and reports no new result; repeated clicks never
+  silently promote the intensity. Changing the strength resets the alternative
+  cursor to canonical so the user's selection is predictable.
+- Snapshot schema v2 stores a bounded alternative cursor (0..4). `restore()`
+  handles v1 snapshots with canonical alternative and rejects malformed v2
+  snapshots atomically. This is an **in-memory value contract**, NOT a VST3
+  preset or project state implementation. No audio-thread allocations are allowed
+  when this layer is eventually integrated into a plugin.
+
+To export three tightly scoped original/VARIATE MIDI pairs:
+
+```sh
+./build/ebm_alternative_demo previews/alternatives
+python tests/verify_midi.py previews/alternatives/*.mid
+```
+
+See [`docs/REPEATED-VARIATE-AUDIT-2026-10-14.md`](docs/REPEATED-VARIATE-AUDIT-2026-10-14.md).
