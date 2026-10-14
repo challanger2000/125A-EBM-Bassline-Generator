@@ -79,3 +79,13 @@ No third-party artist transcriptions or commercial MIDI data are included.
 - Composer and arrangement C++ files unchanged: only the novelty selector, Session exposed diagnostic, tests and documentation were modified. VARIATE/source motif functionality is still verified by existing regression suites.
 - `minimumRhythmicDistance` counts presence/absence differences of grid onset positions (source motif only), is independent of root pitch and phrase variation. Threshold 2 is a provisional engineering acceptance gate, NOT a psychoacoustic cutoff. A fallback after 16 tries must set `meetsTarget=false` and surface the diagnostic score rather than pretend success.
 - **Still NOT VERIFIED:** musical catchiness, EBM musical preference, production usefulness, Windows native, VST3/Studio One, realtime performance/host-state bytes. No GitHub Actions used.
+
+
+## 2026-10-14 — Envelope-sensitive audible rests (research checkpoint)
+
+- Current-source GCC C++17 Release **11/11 CTest PASS**; source MIDI exported by the existing Session demo and independently checked **3/3 PASS**.
+- Offline patch-context render: three fixed generated eight-bar source patterns, 18-ms and 220-ms release while all MIDI and remaining synthesis/beat variables are locked. Within-pair bass RMS match better than 0.001 dB.
+- During notated MIDI rests, LONG vs TIGHT increased relative bass rest-to-active RMS by **+9.81 / +9.87 / +9.44 dB** for MINIMAL/CLASSIC/DARK in this fixture. **Neither patch nor note density is classified as musically superior.**
+- 6/6 WAV byte-identical on repeated output, no clipping; self-test isolates release-only change and rejects malformed input. Artificial-tempo MIDI file independently rejected. Synthetic neutral laboratory sound, not finished EBM sound design.
+- No C++ composition, seed selector, MIDI writer, state schema or VST3 code changed. **Subjective listening, third-party synth behavior, real Windows/Studio One, VST3 validation and musical preference remain NOT VERIFIED.** No GitHub Actions run.
+- Full conditions: [`INSTRUMENT-CONTEXT-AUDIT-2026-10-14.md`](INSTRUMENT-CONTEXT-AUDIT-2026-10-14.md).
