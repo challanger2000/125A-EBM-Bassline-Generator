@@ -33,6 +33,7 @@ const char* operationName(Operation op) {
         case Operation::Omit: return "OMIT";
         case Operation::Anticipate: return "ANTICIPATE";
         case Operation::Answer: return "ANSWER";
+        case Operation::Reaccent: return "REACCENT";
     }
     return "UNKNOWN";
 }
@@ -292,6 +293,30 @@ void answer(Composition& c,int bar,int id,int newInterval) {
     e.interval=newInterval;b.transformed=true;
     c.edits.push_back({bar,Operation::Answer,id,e.step,e.step,previousInterval,newInterval});
 }
+// A two-event *accent exchange* creates a deliberate bass/kick dialogue.
+// It does not insert hits, change rhythm/pitch or raise the sum of velocities.
+// The accent that was anchored on a four-on-floor kick moves to a weak-step
+// answering event, keeping the actual chosen source motif unmodified.
+void reaccent(Composition& c,int bar,int anchorId,int responseId) {
+    Bar& b=c.bars[static_cast<std::size_t>(bar)];
+    Event& anchor=byId(b,anchorId);
+    Event& response=byId(b,responseId);
+    if((anchor.role!=Role::Anchor && anchor.role!=Role::Resolution) || anchor.step%4!=0 ||
+       response.role!=Role::Answer || response.step%4==0 ||
+       anchor.velocity<=response.velocity)
+        throw std::logic_error("REACCENT requires a stronger on-kick anchor and an offbeat answer");
+    Edit record;
+    record.bar=bar; record.operation=Operation::Reaccent;
+    record.eventId=anchorId; record.partnerEventId=responseId;
+    record.previousStep=anchor.step; record.newStep=response.step;
+    record.previousVelocity=anchor.velocity;
+    record.newVelocity=response.velocity;
+    record.partnerPreviousVelocity=response.velocity;
+    record.partnerNewVelocity=anchor.velocity;
+    std::swap(anchor.velocity,response.velocity);
+    b.transformed=true;
+    c.edits.push_back(record);
+}
 void checkConfig(const Config& cfg) {
     if(cfg.bars!=4&&cfg.bars!=8)throw std::invalid_argument("bars must be 4 or 8");
     if(cfg.rootMidi<24||cfg.rootMidi>60)throw std::invalid_argument("rootMidi must be 24..60");
@@ -372,6 +397,13 @@ Composition compose(const Config& cfg) {
             }
         }
     }
+    // High-intensity phrase response: swap emphasis from a downbeat bass
+    // anchor to a deliberately offbeat answering note in the final bar.
+    // Minimal Body deliberately keeps its hypnotic repeated accent contour.
+    if(cfg.variation>=75 && cfg.style==Style::ClassicEBM)
+        reaccent(out,last,108,107);
+    if(cfg.variation>=75 && cfg.style==Style::DarkElectro)
+        reaccent(out,last,101,104);
     validate(out);
     return out;
 }
@@ -400,6 +432,12 @@ static void verifyLineage(const Composition& c) {
                 [&](const Event& event){return event.id==edit.eventId;});
             if(it==reconstructed.notes.end())
                 throw std::invalid_argument("edit references missing or already omitted event");
+            // Unused metadata must not silently hide an unrelated edit.
+            if(edit.operation!=Operation::Reaccent &&
+               (edit.partnerEventId!=-1 || edit.previousVelocity!=0 ||
+                edit.newVelocity!=0 || edit.partnerPreviousVelocity!=0 ||
+                edit.partnerNewVelocity!=0))
+                throw std::invalid_argument("unexpected paired velocity payload");
             switch(edit.operation) {
                 case Operation::Omit:
                     if(edit.previousStep!=it->step || edit.newStep!=-1 ||
@@ -422,10 +460,36 @@ static void verifyLineage(const Composition& c) {
                 case Operation::Answer:
                     if(edit.previousStep!=it->step || edit.newStep!=it->step ||
                        it->role!=Role::Answer || it->interval!=edit.previousInterval ||
-                       edit.previousInterval==edit.newInterval)
+                       edit.previousInterval==edit.newInterval || edit.partnerEventId!=-1 ||
+                       edit.previousVelocity!=0 || edit.newVelocity!=0 ||
+                       edit.partnerPreviousVelocity!=0 || edit.partnerNewVelocity!=0)
                         throw std::invalid_argument("unverifiable ANSWER");
                     it->interval=edit.newInterval;
                     break;
+                case Operation::Reaccent: {
+                    auto partner=std::find_if(reconstructed.notes.begin(),reconstructed.notes.end(),
+                        [&](const Event& event){return event.id==edit.partnerEventId;});
+                    const bool eligible=c.settings.variation>=75 &&
+                        barIndex==c.bars.size()-1 &&
+                        ((c.settings.style==Style::ClassicEBM && edit.eventId==108 &&
+                          edit.partnerEventId==107) ||
+                         (c.settings.style==Style::DarkElectro && edit.eventId==101 &&
+                          edit.partnerEventId==104));
+                    if(!eligible || partner==reconstructed.notes.end() || partner==it ||
+                       edit.previousInterval!=0 || edit.newInterval!=0 ||
+                       (it->role!=Role::Anchor && it->role!=Role::Resolution) || it->step%4!=0 ||
+                       partner->role!=Role::Answer || partner->step%4==0 ||
+                       edit.previousStep!=it->step || edit.newStep!=partner->step ||
+                       edit.previousVelocity!=it->velocity ||
+                       edit.partnerPreviousVelocity!=partner->velocity ||
+                       edit.previousVelocity<=edit.partnerPreviousVelocity ||
+                       edit.newVelocity!=edit.partnerPreviousVelocity ||
+                       edit.partnerNewVelocity!=edit.previousVelocity)
+                        throw std::invalid_argument("unverifiable paired REACCENT");
+                    it->velocity=edit.newVelocity;
+                    partner->velocity=edit.partnerNewVelocity;
+                    break;
+                }
                 default:
                     throw std::invalid_argument("unsupported or fake motif operation");
             }

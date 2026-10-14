@@ -23,3 +23,9 @@ This is a newly built role-based **experimental composition system**, not music 
 4. Gate and velocity numbers are provisional. No musical ratings, no audio comparison of actual EBM recordings, and no editorial verification of artist-specific transcription.
 5. No VST3 host MIDI buses, Studio One, GUI, project recall, automation, zoom, DEMO licensing, macOS build or Windows executable has been implemented/tested for v0.2.
 6. Development branch is `research/v0.2.0-musical-foundation`, not `main`; GitHub Actions remain unused until a musically promising baseline exists.
+
+## Kick/answer accent interlock experiment (2026-10-14)
+
+The final response at `variation>=75` in CLASSIC_EBM and DARK_ELECTRO now performs a **paired REACCENT** after the previously established phrase-form edits. It transfers MIDI velocity numbers between a defined quarter-note-kick anchor/resolution and a non-kick answering note. The first source cell, all MIDI onsets, note gates and pitches remain unchanged; the pair's integer velocity sum is preserved, but that is **not** perceived-loudness conservation. The transfer has a distinct operation type and original/updated velocity values in its provenance log; the independent lineage replay checks the exact roles, kick positions, event IDs, last-bar placement, variation threshold and both before/after values. A forged operation or undocumented velocity is rejected. See `docs/KICK-ANSWER-ACCENT-AUDIT-2026-10-14.md` for controlled baseline and A/B details.
+
+Minimal Body retains its static hypnotic accents; this is intentional. The source MIDI and the entire phrase for variation below 75 are byte-equivalent to the preceding GitHub commit. Synthetic WAV audition exists but human groove preference remains **OPEN**.

@@ -34,3 +34,11 @@ See [grammar vocabulary audit](GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md) for contr
 | Release | NOT READY |
 
 No third-party artist transcriptions or commercial MIDI data are included.
+
+## 2026-10-14 — Kick/answer accent interlock (source checkpoint)
+
+- GCC C++17 Release CTest: **7/7 PASS locally**; AddressSanitizer+UndefinedBehaviorSanitizer CTest: **7/7 PASS locally**.
+- New independent kick/answer suite: **2,400 paired reaccent cases PASS** (2 styles × 300 seeds × 2 phrase lengths × 2 high intensities), **8,400 unchanged cases**, **14 deliberately corrupted logs/notes/configurations rejected**.
+- Paired source-to-output audit across **7,200 identical configurations**: **5,600 exact matches**; **1,600 high-intensity Classic/Dark phrases differ only in precisely two last-bar velocities**. All note onsets, pitches, gates, counts are unchanged. The source motifs remain untouched.
+- Four independent MIDI examples (2 styles × old/new): checked against the standard MIDI parser, **4/4 PASS**. Four WAV previews 44.1 kHz 16-bit mono, same drum accompaniment and sample-aligned timing; **4/4 byte-identical on repeat rendering**. These are laboratory audition materials only.
+- **NOT VERIFIED:** subjective improvement in groove, EBM authenticity, perceptual loudness matching, Windows/Studio One/VST3 and host lifecycle. GitHub Actions **not run**. No musical/production release PASS.

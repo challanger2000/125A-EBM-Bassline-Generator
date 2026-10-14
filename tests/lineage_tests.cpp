@@ -37,7 +37,7 @@ int main() {
     cfg.bars=8;
     cfg.variation=85;
     const Composition base=compose(cfg);
-    CHECK(base.bars.size()==8 && base.edits.size()==4);
+    CHECK(base.bars.size()==8 && base.edits.size()==5);
 
     // An unlogged and valid MIDI-pitch mutation in a plain repeat was accepted
     // by the preceding validator. It must now fail independently of MIDI bounds.

@@ -34,7 +34,7 @@ int main() {
                     CHECK(!changed(c,b));
                     CHECK(!c.bars[static_cast<std::size_t>(b)].transformed);
                 }
-                CHECK(static_cast<int>(c.edits.size())==(level==0?0:level==15?1:level==30?2:level==55?3:4));
+                CHECK(static_cast<int>(c.edits.size())==(level==0?0:level==15?1:level==30?2:level==55?3:4) + ((style!=0 && level>=75)?1:0));
                 if(level==0) {
                     for(int b=0;b<length;++b) CHECK(!changed(c,b));
                 } else {
@@ -46,13 +46,13 @@ int main() {
                         if(level==15) for(int b=0;b<7;++b) CHECK(!changed(c,b));
                         if(level>=30) CHECK(c.edits[1].bar==3);
                         if(level>=55) CHECK(c.edits[2].bar==(style==2?5:6));
-                        if(level>=85) CHECK(c.edits[3].bar==5);
+                        if(level>=85) { CHECK(c.edits[3].bar==5); if(style!=0) CHECK(c.edits[4].bar==length-1 && c.edits[4].operation==Operation::Reaccent); }
                         // Each 8-bar arrangement preserves the introduction.
                         CHECK(!changed(c,0) && !changed(c,1));
                     } else {
                         if(level>=30) CHECK(c.edits[1].bar==3);
                         if(level>=55) CHECK(c.edits[2].bar==(style==2?3:2));
-                        if(level>=85) CHECK(c.edits[3].bar==(style==0||style==2?2:3));
+                        if(level>=85) { CHECK(c.edits[3].bar==(style==0||style==2?2:3)); if(style!=0) CHECK(c.edits[4].bar==length-1 && c.edits[4].operation==Operation::Reaccent); }
                     }
                 }
                 ++checked;

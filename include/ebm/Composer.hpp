@@ -7,7 +7,7 @@
 namespace ebm::v2 {
 // Purely musical intermediate representation. One tick is a 16th in 4/4.
 enum class Role : std::uint8_t { Anchor, Drive, Pickup, Answer, Tension, Resolution };
-enum class Operation : std::uint8_t { Repeat, Omit, Anticipate, Answer };
+enum class Operation : std::uint8_t { Repeat, Omit, Anticipate, Answer, Reaccent };
 // Idiom-specific structural devices, not genre fingerprints or artist presets.
 enum class Device : std::uint8_t {
     PedalGap, DelayedBackbeat, CrossPulse,
@@ -41,6 +41,13 @@ struct Edit {
     // ANSWER only: exact pitch-interval transition; zero for other operations.
     int previousInterval = 0;
     int newInterval = 0;
+    // REACCENT: paired transfer between an on-kick anchor and an offbeat answer.
+    // Exact before/after values make the dynamics as auditable as the note pitches.
+    int partnerEventId = -1;
+    int previousVelocity = 0;
+    int newVelocity = 0;
+    int partnerPreviousVelocity = 0;
+    int partnerNewVelocity = 0;
 };
 struct Composition {
     Config settings{};
