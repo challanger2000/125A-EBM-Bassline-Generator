@@ -12,14 +12,14 @@ The engine develops original monophonic MIDI phrases using musical *roles* inste
 
 Each profile now exposes three **different musical source devices**, with named structural invariants and rejection tests: `PEDAL_GAP` / `DELAYED_BACKBEAT` / `CROSS_PULSE`; `MOTOR_LOCK` / `BREAK_AND_SHOUT` / `OCTAVE_INTERLOCK`; `CLIMB_RELEASE` / `LATE_SUSPENSION` / `BROKEN_ANSWER`. The devices are engine-internal research concepts, not yet user-facing options or authentic recreations of a particular band. The source-motif rhythm and every bar's device label are checked for consistency.
 
-Configuration: root MIDI 24–60, 4 or 8 bars in 4/4, deterministic seed, variation 0–100. The variation value currently maps to five **documented discrete musical stages** (0, 1–24, 25–49, 50–74, 75–100) with 0 preserving exact repetitions. The independent `composeNovel` helper selects from at most 16 candidates against the last eight matching motifs to reduce short-term repetition; it reports a structural metric, not artistic quality. Neither mechanism is realtime safe or wired to a DAW. MIDI export uses standard format 0, 480 PPQ, fixed file tempo 120 BPM; future VST3 host-following tempo/sync is a separate gate.
+Configuration: root MIDI 24–60, 4 or 8 bars in 4/4, deterministic seed, variation 0–100. The variation value currently maps to five **documented discrete musical stages** (0, 1–24, 25–49, 50–74, 75–100) with 0 preserving exact repetitions. **Phrase-arc update (2026-10-14):** for positive variation, the last bar now supplies an intentional answer. On the higher levels the midpoint and the preparation for the ending receive named transforms; first source motifs are unchanged. This is a deterministic song-form hypothesis, not a validated EBM songwriting rule. The independent `composeNovel` helper selects from at most 16 candidates against the last eight matching motifs to reduce short-term repetition; it reports a structural metric, not artistic quality. Neither mechanism is realtime safe or wired to a DAW. MIDI export uses standard format 0, 480 PPQ, fixed file tempo 120 BPM; future VST3 host-following tempo/sync is a separate gate.
 
 ## Build/test (local, no paid Actions)
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure  # five local suites
+ctest --test-dir build -C Release --output-on-failure  # six local suites
 ```
 
 For three optional diagnostic examples (not a 90-file listening assignment):
@@ -39,6 +39,7 @@ Windows multi-config generators generally place the CLI at `build/Release/ebm_pr
 - New compositional breadth audit: [`docs/GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md`](docs/GRAMMAR-VOCABULARY-AUDIT-2026-10-13.md)
 - Dark Electro tonal-direction audit: [`docs/TONAL-CONTOUR-AUDIT-2026-10-14.md`](docs/TONAL-CONTOUR-AUDIT-2026-10-14.md)
 - Motif-lineage regression: [`docs/MOTIF-LINEAGE-AUDIT-2026-10-13.md`](docs/MOTIF-LINEAGE-AUDIT-2026-10-13.md)
+- Multi-bar phrase-form audit: [`docs/PHRASE-FORM-AUDIT-2026-10-14.md`](docs/PHRASE-FORM-AUDIT-2026-10-14.md)
 - Test evidence: [`docs/QA-STATUS.md`](docs/QA-STATUS.md) and [quality audit](docs/QUALITY-AUDIT-2026-10-13.md)
 
 Guidance: `challanger2000/125A-Engineering/START-HERE.md` and relevant standards. `main` is unchanged. v0.1 remains recoverable from Git history, but is **not** the accepted composition model.

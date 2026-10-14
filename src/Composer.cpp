@@ -312,56 +312,63 @@ Composition compose(const Config& cfg) {
     for(int i=0;i<cfg.bars;++i) {
         out.bars.push_back((cfg.style==Style::MinimalBody||i%2==0)?a:b);
     }
-    // Explicit musical intensity bands. Positive variation must not collapse to
-    // a single on/off edit for almost the entire [0,100] range.
-    // 0: exact motifs; 1..24: subtle response; 25..49: rhythmic contrast;
-    // 50..74: strong phrase development; 75..100: additional creative edit.
-    // Source motif bars (first bar or first two bars) are never mutated.
+    // Phrase-level arc, not a per-step random fill: preserve the source A(/B)
+    // cell, make the last bar a recognizable response, and only at greater
+    // intensity change the middle and the approach to that response.
+    // In 8 bars: A/A-B intro (bars 1-2), midpoint contrast (bar 4),
+    // preparation (bars 6/7) and terminal answer (bar 8).
+    // In 4 bars: opening A(/B) remains original; final bar 4 responds.
+    // 0: exact repeat, 1..24: terminal answer, 25..49: midpoint contrast,
+    // 50..74: further approach movement, 75..100: second contrast.
+    // The units are deliberate discrete musical classes, not smooth percent.
+    const int last=cfg.bars-1;
     if(cfg.variation>0) {
-        // The first gentle change occurs in bar 4, not in the original A/B cell.
         if(cfg.style==Style::MinimalBody) {
-            const int old=byId(out.bars[3],5).interval;
-            answer(out,3,5,old==3?7:3);
+            const int old=byId(out.bars[static_cast<std::size_t>(last)],5).interval;
+            answer(out,last,5,old==3?7:3);
         } else if(cfg.style==Style::ClassicEBM) {
-            const int old=byId(out.bars[3],107).interval;
-            answer(out,3,107,old==7?12:7);
+            const int old=byId(out.bars[static_cast<std::size_t>(last)],107).interval;
+            answer(out,last,107,old==7?12:7);
         } else {
-            const int old=byId(out.bars[3],102).interval;
-            answer(out,3,102,old==10?12:10);
+            const int old=byId(out.bars[static_cast<std::size_t>(last)],102).interval;
+            answer(out,last,102,old==10?12:10);
         }
     }
     if(cfg.variation>=25) {
-        // More space rather than randomly raising the number of notes.
+        // At eight bars this contrast is half-way, not another forced fill
+        // in the end; four-bar forms use the final response bar as contrast.
         if(cfg.style==Style::MinimalBody) omit(out,3,3);
         else if(cfg.style==Style::ClassicEBM) omit(out,3,106);
         else {
-            const int old=byId(out.bars[cfg.bars==8?5:3],104).interval;
-            answer(out,cfg.bars==8?5:3,104,old==3?5:3);
+            const int old=byId(out.bars[3],104).interval;
+            answer(out,3,104,old==3?5:3);
         }
     }
     if(cfg.variation>=50) {
-        if(cfg.style==Style::MinimalBody) anticipate(out,cfg.bars==8?7:3,4);
+        // The last A/low-pulse before the reply prepares the final answer.
+        // No random edits to the very first motif, and no double On at a step.
+        if(cfg.style==Style::MinimalBody) anticipate(out,cfg.bars==8?6:2,4);
         else if(cfg.style==Style::ClassicEBM) anticipate(out,cfg.bars==8?6:2,6);
         else omit(out,cfg.bars==8?5:3,103);
     }
     if(cfg.variation>=75) {
         if(cfg.style==Style::MinimalBody) {
-            if(cfg.bars==8) omit(out,7,2);
+            if(cfg.bars==8) omit(out,5,2);
             else { const int old=byId(out.bars[2],5).interval;
                    answer(out,2,5,old==3?7:3); }
         } else if(cfg.style==Style::ClassicEBM) {
             const int bar=cfg.bars==8?5:3;
-            const int old=byId(out.bars[bar],102).interval;
+            const int old=byId(out.bars[static_cast<std::size_t>(bar)],102).interval;
             answer(out,bar,102,old==3?5:3);
         } else {
             if(cfg.bars==8) {
-                const int old=byId(out.bars[7],102).interval;
-                answer(out,7,102,old==10?12:10);
+                const int old=byId(out.bars[5],102).interval;
+                answer(out,5,102,old==10?12:10);
             } else {
-                // Already altered B in bar 4; modify its contour without
-                // adding notes or compromising the original first two bars.
-                const int old=byId(out.bars[3],104).interval;
-                answer(out,3,104,old==5?7:5);
+                // At four bars, alter a non-source question tone without
+                // erasing the B-bar closing answer or losing tonal contour.
+                const int old=byId(out.bars[2],2).interval;
+                answer(out,2,2,old==3?5:3);
             }
         }
     }
