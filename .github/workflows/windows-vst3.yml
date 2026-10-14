@@ -9,6 +9,7 @@ on:
       - 'include/ebm/HostBridge.hpp'
       - 'tests/host_bridge_tests.cpp'
       - 'tests/core_novelty_tests.cpp'
+      - 'tests/engine_tests.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-vst3.yml'
   workflow_dispatch:

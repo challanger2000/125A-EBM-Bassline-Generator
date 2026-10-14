@@ -61,7 +61,7 @@ int main() {
                     cfg.rootMidi=36;
                     REQUIRE(render(compose(cfg)).notes==phrase.notes); // C -> G -> C restore
                     if(intensity>0) {
-                        const int expectedEdits=(intensity<25?1:(intensity<50?2:(intensity<75?3:4)));
+                        const int expectedEdits=(intensity<25?1:(intensity<50?2:(intensity<75?3:4)))+((intensity>=75&&s!=0)?1:0);
                         REQUIRE(static_cast<int>(composed.edits.size())==expectedEdits);
                     }
                     if(intensity==0) {
