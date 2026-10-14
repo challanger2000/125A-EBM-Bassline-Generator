@@ -89,3 +89,14 @@ No third-party artist transcriptions or commercial MIDI data are included.
 - 6/6 WAV byte-identical on repeated output, no clipping; self-test isolates release-only change and rejects malformed input. Artificial-tempo MIDI file independently rejected. Synthetic neutral laboratory sound, not finished EBM sound design.
 - No C++ composition, seed selector, MIDI writer, state schema or VST3 code changed. **Subjective listening, third-party synth behavior, real Windows/Studio One, VST3 validation and musical preference remain NOT VERIFIED.** No GitHub Actions run.
 - Full conditions: [`INSTRUMENT-CONTEXT-AUDIT-2026-10-14.md`](INSTRUMENT-CONTEXT-AUDIT-2026-10-14.md).
+
+## 2026-10-14 — Explicit Loopable vs OneShot MIDI ending
+
+- **Reason:** a final-bar chromatic Tension intended to resolve on the next loop lacks that destination in a finite one-shot MIDI file. It is correct in repeated playback.
+- **Implementation:** added RenderEnding modes: Loopable (existing default, preserves all notes) and OneShot (suppresses only final-bar Tension notes targeting the next loop). No pitch, length or velocity changes to any retained note; original motifs and state unchanged.
+- **Release:** 12/12 local GCC C++17 CTest PASS; new independent suite checks 28,800 arrangements, with 16,928 one-shot pickup omissions and 11,872 exact-unchanged cases.
+- **ASan+UBSan:** all 12 suites PASS across split invocations with leak detection. The initial combined run reached a 45-second execution boundary; remaining Session and Core Novelty suites passed separately (27.01 s and 54.44 s).
+- **MIDI:** six style-matched eight-bar MIDI files pass independent Python parser; old and new default preview exports are 3/3 byte-identical.
+- **Open:** no real instrument listening approval, Windows build or Studio One/VST3 test. GitHub Actions not used.
+
+See docs/LOOP-VS-ONESHOT-MIDI-AUDIT-2026-10-14.md for configuration and limits.

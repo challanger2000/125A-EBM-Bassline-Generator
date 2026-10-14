@@ -61,7 +61,12 @@ Composition compose(const Config& config);
 // source cell. 0 is the unaltered selected variation level; 1..4 each adds one
 // role-based edit to an untouched downstream bar or response. Not realtime-safe.
 Composition composeAlternative(const Config& config, int alternative);
+// A loop lead on the last 16th resolves when the phrase repeats. A finite
+// one-shot MIDI file has no following downbeat; do not export that note there.
+// Default render() remains loopable and byte-for-byte backwards compatible.
+enum class RenderEnding : std::uint8_t { Loopable, OneShot };
 Phrase render(const Composition& composition);
+Phrase render(const Composition& composition, RenderEnding ending);
 // Throws std::invalid_argument for a broken musical contract.
 void validate(const Composition& composition);
 const char* roleName(Role role);

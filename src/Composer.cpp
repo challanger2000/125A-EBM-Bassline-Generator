@@ -739,13 +739,26 @@ void validate(const Composition& c) {
     }
     verifyLineage(c);
 }
-Phrase render(const Composition& c) {
+Phrase render(const Composition& c, RenderEnding ending) {
+    if(ending!=RenderEnding::Loopable && ending!=RenderEnding::OneShot)
+        throw std::invalid_argument("unknown MIDI ending policy");
     validate(c);
     Phrase out;out.bars=c.settings.bars;
-    for(std::size_t i=0;i<c.bars.size();++i)
-        for(const auto& note:c.bars[i].notes)
+    for(std::size_t i=0;i<c.bars.size();++i) {
+        for(const auto& note:c.bars[i].notes) {
+            // The final chromatic approach points to the *next loop's* first
+            // anchor. This resolution does not exist in a standalone export.
+            // Do not invent a resolution or change any other phrase event.
+            if(ending==RenderEnding::OneShot && i+1==c.bars.size() &&
+               note.role==Role::Tension && note.targetBarDelta==1)
+                continue;
             out.notes.push_back({static_cast<int>(i)*16+note.step,
                 c.settings.rootMidi+note.interval,note.velocity,note.duration});
+        }
+    }
     return out;
+}
+Phrase render(const Composition& c) {
+    return render(c,RenderEnding::Loopable);
 }
 } // namespace ebm::v2

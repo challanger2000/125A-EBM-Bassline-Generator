@@ -125,3 +125,18 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME EBM_Core_Groove_Novelty COMMAND ebm_core_novelty_tests)
 endif()
+
+# Loop seam vs finite one-shot MIDI export: independent musical boundary QA.
+if(BUILD_TESTING)
+    add_executable(ebm_loop_boundary_tests tests/loop_boundary_tests.cpp)
+    target_link_libraries(ebm_loop_boundary_tests PRIVATE ebm_core)
+    if(MSVC)
+        target_compile_options(ebm_loop_boundary_tests PRIVATE /W4 /WX)
+    else()
+        target_compile_options(ebm_loop_boundary_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME EBM_OneShot_And_Loop_Seam COMMAND ebm_loop_boundary_tests)
+endif()
+
+add_executable(ebm_boundary_demo tools/ebm_boundary_demo.cpp)
+target_link_libraries(ebm_boundary_demo PRIVATE ebm_core)
