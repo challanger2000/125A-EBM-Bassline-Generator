@@ -140,3 +140,16 @@ endif()
 
 add_executable(ebm_boundary_demo tools/ebm_boundary_demo.cpp)
 target_link_libraries(ebm_boundary_demo PRIVATE ebm_core)
+
+# Host-neutral, allocation-free live MIDI runtime (not a VST3 build).
+target_sources(ebm_core PRIVATE src/LiveMidi.cpp)
+if(BUILD_TESTING)
+    add_executable(ebm_live_midi_tests tests/live_midi_tests.cpp)
+    target_link_libraries(ebm_live_midi_tests PRIVATE ebm_core)
+    if(MSVC)
+        target_compile_options(ebm_live_midi_tests PRIVATE /W4 /WX)
+    else()
+        target_compile_options(ebm_live_midi_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME EBM_Live_MIDI_Scheduler COMMAND ebm_live_midi_tests)
+endif()
