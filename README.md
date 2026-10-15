@@ -1,6 +1,8 @@
 # 125A EBM Bassline Generator
 
-**125A EBM Bassline Generator V1.0.0 — Windows x64 MIDI-only VST3.**\n\nRelease source: `release/v1.0.0-windows`. The owner has broadly accepted the practical Studio One behavior. The predecessor automated Windows QA passed; see [CURRENT.md](CURRENT.md) for exact verified provenance and remaining release gates. A separately compiled version-labelled V1 binary is required.
+**125A EBM Bassline Generator V1.0.0 — Windows x64 MIDI-only VST3.**
+
+Release source: `release/v1.0.0-windows`. The owner has broadly accepted the practical Studio One behavior. The predecessor automated Windows QA passed; see [CURRENT.md](CURRENT.md) for exact verified provenance and remaining release gates. A separately compiled version-labelled V1 binary is required.
 
 Current implementation, all 15 repair findings, compatibility and measured QA:
 [`docs/FINAL-QA-CODEX-RC-2026-10-15.md`](docs/FINAL-QA-CODEX-RC-2026-10-15.md).
