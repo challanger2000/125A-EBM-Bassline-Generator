@@ -80,7 +80,7 @@ jobs:
       - name: Build independent VST3 host lifecycle / state probe
         shell: pwsh
         run: cmake --build build-vst3 --config Release --parallel 4 --target EBMHostProbe
-      - name: Probe native state and five Windows editor lifecycles
+      - name: Probe native state and twenty Windows editor lifecycles
         shell: pwsh
         timeout-minutes: 5
         run: |
