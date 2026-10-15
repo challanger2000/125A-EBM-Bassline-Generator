@@ -8,7 +8,9 @@ Active branch: `fix/p1-codex-qa-2026-10-15`.
 The previous RC has a confirmed MIDI NOTE restart defect on separated Off/On.
 [Current repair, semantics and QA](docs/MIDI-PHASE-RC-2026-10-15.md) supersede
 that RC's phase/trigger claims. Its completed build remains preserved below.
-New artifact: `125A-EBM-v0.2-MIDI-PHASE-RC-Windows-x64`; Windows execution pending.
+Tested source `a54512812206e248d4c028ba2f2ea53ceb3a34d7`.
+[Windows build PASS / new ZIP](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38790308058#artifacts):
+`125A-EBM-v0.2-MIDI-PHASE-RC-Windows-x64`, artifact11998958012 (GitHub login).
 
 ## Preserved earlier candidate
 

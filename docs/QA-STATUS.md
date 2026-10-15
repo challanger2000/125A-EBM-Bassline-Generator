@@ -1,3 +1,6 @@
+> Current MIDI NOTE phase follow-up: [repair and verified Windows candidate](MIDI-PHASE-RC-2026-10-15.md).
+> Earlier build evidence below remains historical; it does not certify separated trigger Off/On continuity.
+
 > HISTORICAL standalone-engine chronology, retained as original evidence.
 > Current candidate and open Windows/DAW gates: [Final-QA RC](FINAL-QA-CODEX-RC-2026-10-15.md).
 > Historical NOT IMPLEMENTED / NOT VERIFIED statements below are checkpoint-specific.

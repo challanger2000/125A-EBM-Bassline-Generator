@@ -1,0 +1,33 @@
+Public GitHub Actions observation, 2026-10-15 UTC
+Run: https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38790308058
+Head / implementation: a54512812206e248d4c028ba2f2ea53ceb3a34d7
+Job: 116612845977; duration 3m48s; conclusion SUCCESS
+
+Set up job: success
+Run actions/checkout@v4: success
+Check complete local source coverage: success
+Configure Steinberg SDK 3.8.1 Windows x64: success
+Build experimental GUI VST3 and 19 C++ tests: success
+Run all Windows core and GUI regressions: success
+Verify twelve independent MIDI exports: success
+Build original Steinberg VST3 Validator: success
+Stage complete branded GUI VST3: success
+Build independent VST3 host lifecycle / state probe: success
+Probe native state and twenty Windows editor lifecycles: success
+Steinberg Validator on native GUI bundle: success
+Record candidate binary checksums: success
+Archive experimental GUI plugin (NOT FINAL): success
+Publish precise QA job summary: success
+Post Run actions/checkout@v4: success
+Complete job: success
+
+Artifact ID: 11998958012
+Name: 125A-EBM-v0.2-MIDI-PHASE-RC-Windows-x64
+Displayed size: 1.63 MB
+GitHub archive SHA256: a7a0bcaec3f46dcfc8f810347b30c0ddd0a7033c6e5bfd634e216c561c8753d0
+One Windows run for this follow-up; no intermediate Actions / rerun.
+One nonfatal warning: checkout@v4/upload-artifact@v4 Node20 deprecation; GitHub used Node24.
+Public HTML confirms all step conclusions and archive metadata. Raw Windows logs,
+job summary and ZIP contents require GitHub login and were not independently
+downloaded in this session. Archive digest is not inner plugin binary hash.
+Previous RC run38787724599 and artifact11998965328 remain preserved.

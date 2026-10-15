@@ -111,12 +111,32 @@ downstream instrument's envelope response to retuning.
 
 ## Windows handoff
 
-Windows run / source commit / new ZIP: **PENDING** until the one bundled build
-completes. Artifact name `125A-EBM-v0.2-MIDI-PHASE-RC-Windows-x64` distinguishes
-this candidate from the preserved earlier RC. Existing workflow gates remain:
-19 Release suites, 12 real MIDI exports, actual staged plugin host/GUI/lifecycle
-checks (40 editor cycles) and Steinberg Validator, then hashes and archive.
-No intermediate Actions push or 125A Plugin Tester invocation.
+Implementation / tested source: **`a54512812206e248d4c028ba2f2ea53ceb3a34d7`**.
+
+**Windows PASS:** [Actions run38790308058](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38790308058),
+job116612845977, 3m48s. Exactly **one** bundled follow-up run, no intermediate
+Actions builds and no reruns. All workflow steps succeeded: MSVC Release x64,
+all19 suites (including the new phase oracle), expected failing negative control,
+12 actual MIDI exports, actual staged module host/phase/automation/state tests
+in both formats, 40 Win32 editor cycles with selected gestures at both zooms,
+and Steinberg Validator. The Windows validator count is not independently
+visible in public HTML; the Linux537 count is not substituted for it.
+
+[Download new Windows x64 ZIP — Actions Artifacts](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38790308058#artifacts)
+(GitHub login required): **`125A-EBM-v0.2-MIDI-PHASE-RC-Windows-x64`**,
+artifact **11998958012**, displayed **1.63 MB**.
+[Direct artifact link](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38790308058/artifacts/11998958012).
+GitHub-reported archive SHA-256:
+`a7a0bcaec3f46dcfc8f810347b30c0ddd0a7033c6e5bfd634e216c561c8753d0`.
+The archive contains the complete branded VST3, QA logs/MIDI fixtures,
+SOURCE-COMMIT.txt and SHA256SUMS.txt. The previous RC ZIP was not replaced.
+
+[Observed Windows evidence](qa/midi-phase-2026-10-15/windows-actions.txt) records
+public run/job conclusions and archive metadata. Authenticated raw logs, job
+summary and ZIP payload were not independently downloaded in this cloud session;
+the digest above identifies the archive, not the inner DLL. One nonfatal Actions
+Node20 deprecation warning remains as previously documented; GitHub ran Node24.
+The Plugin Tester was never run in Actions.
 
 **NOT VERIFIED:** actual Studio One, owner-local Plugin Tester v0.2.10 FINAL,
 listening/visual acceptance. No FINAL, main merge or publication.
