@@ -14,6 +14,9 @@ int main(){
   CHECK(phrase.bars==bars);
   CHECK(phrase.notes.size()==2);
   CHECK(phrase.notes[0].duration==8);
+  // QA-03: effective MIDI gate stops at the next NoteOn despite a 1 BAR stored length.
+  CHECK(p.steps[0].length==16);
+  CHECK(e::lengthText(phrase.notes[0].duration)=="1/2");
   CHECK(phrase.notes[1].velocity==127);
   ebm::live::Pattern rt{};
   CHECK(ebm::live::prepare(phrase,rt));
@@ -113,6 +116,8 @@ int main(){
  CHECK(ebm::host::decode(legacy.data(),ebm::host::kLegacyDocumentBytes,recovered));
  CHECK(!recovered.editable.enabled);
  CHECK(ebm::edit::toPhrase(recovered.editable).bars==8);
+ CHECK(model.restore(recovered));
+ CHECK(model.songStartBar()==1); // QA-02: EBM1 transport starts at DAW bar 1.
  // An active MIDI trigger must survive a GUI-authored pattern swap, including
  // the next step's new pitch/velocity and its proper NoteOff.
  {
