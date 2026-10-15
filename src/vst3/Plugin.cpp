@@ -103,10 +103,11 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
     }
     live::Trigger triggers[live::Runtime::maxTriggers]{};
     int count=0;
+    bool inputOverflow=false;
     if(data.inputEvents){
         const int32 total=data.inputEvents->getEventCount();
-        if(total>live::Runtime::maxTriggers)return kResultFalse;
-        for(int32 i=0;i<total;++i){
+        if(total>live::Runtime::maxTriggers)inputOverflow=true;
+        for(int32 i=0;!inputOverflow&&i<total;++i){
             Steinberg::Vst::Event ev{};
             if(data.inputEvents->getEvent(i,ev)!=kResultOk)continue;
             if(ev.type!=Steinberg::Vst::Event::kNoteOnEvent &&
@@ -140,6 +141,7 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         }
         return data.outputEvents->addEvent(event)==kResultOk;
     };
+    if(inputOverflow)cleanupPending_.store(true,std::memory_order_release);
     if(cleanupPending_.exchange(false,std::memory_order_acq_rel)){
         const auto wanted=model_.mode();
         model_.setMode(live::Mode::Transport);
@@ -152,6 +154,8 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         }
         model_.setMode(wanted);
     }
+    // Never schedule a fresh note from an oversized/invalid input block.
+    if(inputOverflow)return kResultFalse;
     if(!model_.process(block,triggers,count,sink))return kResultFalse;
     int step=16; // 16 is "not playing" for this 0..16 read-only parameter.
     if(model_.mode()==live::Mode::Transport&&block.playing&&block.ppqValid&&block.tempoValid &&
@@ -212,7 +216,7 @@ tresult PLUGIN_API Controller::setComponentState(IBStream* stream){
   v2::Session next;next.restore(doc.session);
   auto pat=doc.editable.enabled?doc.editable:
             edit::fromPhrase(next.hasCurrent()?v2::render(next.current()):Phrase{next.options().bars,{}},
-                             next.options().bars,edit::Scale::Chromatic,2);
+                             next.options().bars,edit::Scale::Chromatic,1);
   if(!edit::valid(pat))return kResultFalse;
   session_=std::move(next);editable_=pat;mode_=doc.mode;gate_=doc.gatePercent;
   bar_=std::clamp(bar_,0,editable_.bars-1);
