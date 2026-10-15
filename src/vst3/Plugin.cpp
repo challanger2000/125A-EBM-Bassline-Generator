@@ -277,7 +277,11 @@ VSTGUI::CView* Controller::createCustomView(VSTGUI::UTF8StringPtr name,
  return nullptr;
 }
 void Controller::willClose(VSTGUI::VST3Editor* closed){
- if(editor_==closed){editor_=nullptr;panel_=nullptr;textInput_=nullptr;editIndex_=-1;editRow_=-1;}
+ if(editor_==closed){
+  // A host may close the editor mid-drag without sending mouse-up.
+  endGateGesture();
+  editor_=nullptr;panel_=nullptr;textInput_=nullptr;editIndex_=-1;editRow_=-1;
+ }
 }
 void Controller::redraw(){if(panel_)panel_->invalid();}
 bool Controller::deliver(const v2::Session& next,live::Mode mode,const edit::Pattern& pattern,int gate){
