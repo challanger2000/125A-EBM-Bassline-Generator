@@ -144,6 +144,23 @@ int main(){
     CHECK(!backpressure.process(p,f,nullptr,0,reject));CHECK(backpressure.activePitch()==36);
     CHECK(backpressure.process(p,f,nullptr,0,reject));CHECK(backpressure.activePitch()==-1);
     CHECK(reject.count==2 && !reject.data[1].on);
+    // P1-02: a rejected bass NoteOff must never revive the released trigger.
+    Runtime stopRetry;
+    stopRetry.setMode(Mode::MidiNote);
+    Sink stopSink;
+    Block sb;sb.samples=20;sb.sampleRate=1000.;sb.tempo=120.;sb.revision=1;
+    const Trigger heldStart{0,48,true};
+    CHECK(stopRetry.process(p,sb,&heldStart,1,stopSink));
+    CHECK(stopRetry.triggerHeld() && stopRetry.activePitch()>=0);
+    stopSink.failNextOff=true;
+    const Trigger heldStop{0,48,false};
+    CHECK(!stopRetry.process(p,sb,&heldStop,1,stopSink));
+    CHECK(!stopRetry.triggerHeld());
+    CHECK(stopRetry.process(p,sb,nullptr,0,stopSink));
+    CHECK(stopRetry.activePitch()==-1 && !stopRetry.triggerHeld());
+    const int afterStop=stopSink.count;
+    CHECK(stopRetry.process(p,sb,nullptr,0,stopSink));
+    CHECK(stopSink.count==afterStop);
     // QA-01: over-limit input must release an active note, with NoteOff
     // backpressure retried on the following callback; no duplicate release.
     Runtime overflow;
