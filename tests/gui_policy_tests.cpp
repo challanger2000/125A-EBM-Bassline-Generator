@@ -67,6 +67,26 @@ int main(){
  CHECK(dragValue(Target::Length,1,32,16)==9);
  CHECK(dragValue(Target::Length,9,-500,16)==1);
  CHECK(dragValue(Target::Length,9,500,16)==16);
+ // PITCH drag: diatonic movements preserve the current ROOT/SCALE, obey
+ // the two-octave viewport and return to their original note.
+ CHECK(pitchMin(48)==36&&pitchMax(48)==60);
+ CHECK(pitchDrag(48,48,edit::Scale::NaturalMinor,8)==50);  // C -> D
+ CHECK(pitchDrag(48,48,edit::Scale::NaturalMinor,16)==51); // C -> Eb
+ CHECK(pitchDrag(48,48,edit::Scale::NaturalMinor,-8)==46);// C -> Bb below
+ CHECK(pitchDrag(48,48,edit::Scale::NaturalMinor,0)==48);
+ CHECK(pitchDrag(48,48,edit::Scale::NaturalMinor,800)==60);
+ CHECK(pitchDrag(48,48,edit::Scale::NaturalMinor,-800)==36);
+ CHECK(pitchDrag(48,48,edit::Scale::Chromatic,8)==49);
+ CHECK(pitchDrag(48,48,edit::Scale::Chromatic,16)==50);
+ for(int key=24;key<=60;++key)for(int mode=0;mode<edit::kScaleCount;++mode){
+  const auto scale=static_cast<edit::Scale>(mode);
+  for(int delta=-200;delta<=200;delta+=8){
+   const int note=pitchDrag(key,key,scale,delta);
+   CHECK(note>=pitchMin(key)&&note<=pitchMax(key));
+   CHECK(edit::inScale(note,key,scale));
+  }
+ }
+
  CHECK(variationValue(-100)==0);
  CHECK(variationValue(628)==0);
  CHECK(variationValue(769)==100);
