@@ -529,7 +529,10 @@ void Controller::valueChanged(VSTGUI::CControl* control){
  const int minimum=editRow_>=4?0:1;
  const int maximum=editRow_>=4?100:editRow_==2?127:edit::maximumLength(editable_,editIndex_);
  if(!ui::integer(textInput_->getText().data(),minimum,maximum,value)){
-  status_="ENTER A VALID INTEGER IN RANGE";redraw();return;
+  // Never leave an uncommitted number over the real LENGTH readout.
+  // The pattern remains unchanged; redraw its effective notation.
+  textInput_->setVisible(false);editIndex_=-1;editRow_=-1;
+  status_="INVALID VALUE - NO CHANGE";redraw();return;
  }
  if(editRow_==4)setGateValue(value);
  else if(editRow_==5)setVariationValue(value);
