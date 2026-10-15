@@ -59,6 +59,14 @@ inline int guiChecks(HWND window,int zoom,Steinberg::Vst::IComponent* component,
  click(231,270);GUI_CHECK(read(observed)&&observed.editable.steps[0].on);
  click(231,270,MK_SHIFT);click(45,131,MK_CONTROL);GUI_CHECK(read(observed));
  GUI_CHECK(observed.editable.steps[0].locked&&observed.editable.steps[0].length==16);GUI_CHECK(reset());
+ // Real mouse drag on PITCH: default chromatic ROOT C2 (MIDI48),
+ // two scale steps up -> D2 (MIDI50), without altering other steps.
+ SendMessageW(gui,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(231*zoom/100,322*zoom/100));
+ SendMessageW(gui,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(231*zoom/100,306*zoom/100));
+ SendMessageW(gui,WM_LBUTTONUP,0,MAKELPARAM(231*zoom/100,306*zoom/100));
+ GUI_CHECK(read(observed)&&observed.editable.steps[0].pitch==50);
+ GUI_CHECK(reset());
+
  const int begins=handler->begins,ends=handler->ends;
  SendMessageW(gui,WM_LBUTTONDOWN,MK_LBUTTON,MAKELPARAM(691*zoom/100,530*zoom/100));
  for(int x:{730,780,836})SendMessageW(gui,WM_MOUSEMOVE,MK_LBUTTON,MAKELPARAM(x*zoom/100,530*zoom/100));
@@ -77,6 +85,14 @@ inline int guiChecks(HWND window,int zoom,Steinberg::Vst::IComponent* component,
  GUI_CHECK(type(750,518,L"50"));GUI_CHECK(read(observed)&&observed.gatePercent==50);
  GUI_CHECK(type(700,140,L"45"));GUI_CHECK(read(observed)&&observed.session.options.variation==45);
  GUI_CHECK(type(231,423,L"1"));GUI_CHECK(read(observed)&&observed.editable.steps[0].length==1);
+ // A freshly opened LENGTH editor is an overlay; BAR navigation must hide
+ // it rather than displaying the old value over another bar's actual LENGTH.
+ SendMessageW(gui,WM_LBUTTONDBLCLK,MK_LBUTTON,MAKELPARAM(231*zoom/100,423*zoom/100));
+ HWND numericOverlay=nullptr;EnumChildWindows(gui,findEdit,reinterpret_cast<LPARAM>(&numericOverlay));
+ GUI_CHECK(numericOverlay&&IsWindowVisible(numericOverlay));
+ click(612,200);GUI_CHECK(!IsWindowVisible(numericOverlay));
+ GUI_CHECK(read(observed)&&observed.editable.steps[0].length==1);
+
  GUI_CHECK(type(231,372,L"12x"));GUI_CHECK(read(observed)&&observed.editable.steps[0].velocity==101);
  GUI_CHECK(processorPoint->disconnect(controllerPoint)==kResultOk);GUI_CHECK(controllerPoint->disconnect(processorPoint)==kResultOk);
  processorPoint->release();controllerPoint->release();controller->setComponentHandler(nullptr);handler->release();
