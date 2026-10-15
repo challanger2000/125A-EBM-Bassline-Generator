@@ -61,35 +61,39 @@ int main(){
     REQUIRE(ebm::live::prepare(one,first));
     const ebm::Phrase two{4,{{0,40,110,1},{8,43,95,2}}};
     REQUIRE(ebm::live::prepare(two,second));
-    REQUIRE(exchange.publish(first));
-    REQUIRE(exchange.publish(second));
+    host::PreparedState frame1{};frame1.pattern=first;frame1.root=36;frame1.scale=ebm::edit::Scale::Major;frame1.songStart=2;
+    host::PreparedState frame2{};frame2.pattern=second;frame2.root=40;frame2.scale=ebm::edit::Scale::NaturalMinor;frame2.songStart=4;
+    REQUIRE(exchange.publish(frame1));
+    REQUIRE(exchange.publish(frame2));
     std::uint64_t revision=0;
     const auto* selected=exchange.acquire(revision);
-    REQUIRE(selected && revision==1 && selected->cells[0].onPitch==40);
+    REQUIRE(selected && revision==1 && selected->pattern.cells[0].onPitch==40 && selected->root==40 && selected->songStart==4 && selected->scale==ebm::edit::Scale::NaturalMinor);
     REQUIRE(exchange.acquire(revision)==selected && revision==1);
-    REQUIRE(exchange.publish(first));
+    REQUIRE(exchange.publish(frame1));
     selected=exchange.acquire(revision);
-    REQUIRE(selected && revision==2 && selected->cells[0].onPitch==36);
+    REQUIRE(selected && revision==2 && selected->pattern.cells[0].onPitch==36 && selected->root==36 && selected->songStart==2 && selected->scale==ebm::edit::Scale::Major);
 
     // Simulate non-realtime publication while the audio side continuously
     // adopts snapshots. No partial/cross-wired patterns are permitted.
     {
         host::PatternExchange simultaneous;
-        REQUIRE(simultaneous.publish(first));
+        REQUIRE(simultaneous.publish(frame1));
         std::atomic<bool> finished{false};
         std::thread writer([&]{
             for(int i=0;i<10000;++i)
-                (void)simultaneous.publish((i%2)==0?first:second);
+                (void)simultaneous.publish((i%2)==0?frame1:frame2);
             finished.store(true,std::memory_order_release);
         });
         std::uint64_t ticket=0;
         while(!finished.load(std::memory_order_acquire)){
             const auto* current=simultaneous.acquire(ticket);
             if(current){
-                const int pitch=current->cells[0].onPitch;
+                const int pitch=current->pattern.cells[0].onPitch;
                 if(pitch!=36&&pitch!=40)std::abort();
-                if(current->cells[8].onPitch!=43)std::abort();
-                if(current->cells[8].velocity!=95)std::abort();
+                if(pitch==36 && (current->root!=36 || current->songStart!=2 || current->scale!=ebm::edit::Scale::Major))std::abort();
+                if(pitch==40 && (current->root!=40 || current->songStart!=4 || current->scale!=ebm::edit::Scale::NaturalMinor))std::abort();
+                if(current->pattern.cells[8].onPitch!=43)std::abort();
+                if(current->pattern.cells[8].velocity!=95)std::abort();
             }
         }
         writer.join();
