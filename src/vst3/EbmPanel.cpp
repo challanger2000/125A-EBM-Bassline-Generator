@@ -1,6 +1,7 @@
 #include "EbmPanel.hpp"
 #include "Plugin.hpp"
 #include "UiGeometry.hpp"
+#include "ebm/ScaleNoteDisplay.hpp"
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/cfont.h"
 #include "vstgui/lib/cbuttonstate.h"
@@ -121,6 +122,20 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
  fill(dc,27,207,44,37,pressed_==ui::Target::PrevBar?accent:card);label(dc,"<",27,217,44,20,foreground,true);
  label(dc,std::to_string(current+1)+" / "+std::to_string(p.bars),76,217,82,20,foreground,true);
  fill(dc,160,207,44,37,pressed_==ui::Target::NextBar?accent:card);label(dc,">",160,217,44,20,foreground,true);
+ // Show exactly the pitch classes accepted by the current ROOT/SCALE.
+ // It updates with redraw() after either selector is changed, without
+ // introducing a new control or altering MIDI output or project state.
+ label(dc,"TRIGGER NOTES",ui::scaleGuideX,ui::scaleGuideY,
+       ui::scaleGuideLabelW,ui::scaleGuideH,faint);
+ const auto allowed=edit::triggerScaleNotes(cfg.rootMidi,p.scale);
+ if(allowed.count>0){
+  const int cell=ui::scaleGuideNotesW/allowed.count;
+  for(int n=0;n<allowed.count;++n){
+   const int x=ui::scaleGuideNotesX+n*cell;
+   label(dc,allowed.names[static_cast<std::size_t>(n)],x,ui::scaleGuideY,
+         cell,ui::scaleGuideH,n==0?hot:foreground,true);
+  }
+ }
  for(int b=0;b<p.bars;++b){
   fill(dc,550+b*62,190,58,24,
        (pressed_==ui::Target::Bar&&pressedColumn_==b)?hot:(b==current?accent:card),b==current?hot:edge);

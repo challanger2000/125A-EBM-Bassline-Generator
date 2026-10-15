@@ -2,6 +2,11 @@
 #include <algorithm>
 namespace ebm::vst3::ui {
 constexpr int width=1100,height=590,gridX=206,gridY=250,cellW=51,rowH=51;
+// Read-only scale guide lives in the BAR-header row, clear of both the
+// direct BAR buttons at x>=550 and the STEP numbers below y=222.
+constexpr int scaleGuideX=210,scaleGuideY=190,scaleGuideH=24;
+constexpr int scaleGuideLabelW=98,scaleGuideNotesX=308,scaleGuideNotesW=234;
+static_assert(scaleGuideNotesX+scaleGuideNotesW<550 && scaleGuideY+scaleGuideH<=222);
 enum class Target {None,Style,Bars,Root,Scale,Variation,SongStart,Trigger,Zoom,
                     PrevBar,NextBar,Bar,Generate,Variate,Clear,Copy,Paste,Gate,Export,
                     NoteOn,Pitch,Velocity,Length};

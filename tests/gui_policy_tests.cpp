@@ -1,8 +1,10 @@
 #include "../src/vst3/UiGeometry.hpp"
 #include "ebm/HostBridge.hpp"
 #include "ebm/MidiWriter.hpp"
+#include "ebm/ScaleNoteDisplay.hpp"
 #include <iostream>
 #include <array>
+#include <string>
 using namespace ebm;
 #define CHECK(x) do {if(!(x)){std::cerr<<__LINE__<<": " #x "\n";return 1;}}while(false)
 int main(){
@@ -21,6 +23,37 @@ int main(){
   const auto h=hit(gridX+col*cellW+25,gridY+row*rowH+20);
   CHECK(h.column==col&&h.row==row);
   CHECK(h.target==(row==0?Target::NoteOn:row==1?Target::Pitch:row==2?Target::Velocity:Target::Length));
+ }
+ // The read-only guide stays strictly between the BAR arrows and BAR tabs,
+ // above the 16 STEP numbers; it must not intercept any mouse action.
+ CHECK(scaleGuideX>=204 && scaleGuideNotesX>=scaleGuideX+scaleGuideLabelW);
+ CHECK(scaleGuideNotesX+scaleGuideNotesW<550);
+ CHECK(scaleGuideY+scaleGuideH<=222);
+ CHECK(hit(scaleGuideNotesX+50,scaleGuideY+10).target==Target::None);
+ // Exact pitch-class set comes from inScale(), not a separate mode table.
+ const auto names=[](int key,edit::Scale scale){
+  const auto notes=edit::triggerScaleNotes(key,scale);
+  std::string rendered;
+  for(int j=0;j<notes.count;++j){if(j)rendered+=' ';rendered+=notes.names[static_cast<std::size_t>(j)];}
+  return rendered;
+ };
+ CHECK(names(48,edit::Scale::Major)=="C D E F G A B");
+ CHECK(names(48,edit::Scale::NaturalMinor)=="C D Eb F G Ab Bb");
+ CHECK(names(57,edit::Scale::NaturalMinor)=="A B C D E F G");
+ CHECK(names(52,edit::Scale::NaturalMinor)=="E F# G A B C D");
+ CHECK(names(48,edit::Scale::MinorPentatonic)=="C Eb F G Bb");
+ CHECK(names(48,edit::Scale::Chromatic)=="C C# D D# E F F# G G# A A# B");
+ for(int root=24;root<=60;++root)for(int mode=0;mode<edit::kScaleCount;++mode){
+  const auto scale=static_cast<edit::Scale>(mode);
+  const auto notes=edit::triggerScaleNotes(root,scale);
+  int expected=0;
+  for(int semitone=0;semitone<12;++semitone){
+   const int pitchClass=(root%12+semitone)%12;
+   if(edit::inScale(60+pitchClass,root,scale))++expected;
+  }
+  CHECK(notes.count==expected);
+  CHECK(notes.count==(mode==0?12:mode==9?5:7));
+  for(int n=0;n<notes.count;++n)CHECK(notes.names[static_cast<std::size_t>(n)]!=nullptr);
  }
  // Separate BAR navigation from the 16 STEP-number header at y>=222.
  for(int bar=0;bar<8;++bar){
