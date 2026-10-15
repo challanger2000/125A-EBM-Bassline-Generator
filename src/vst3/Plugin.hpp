@@ -64,6 +64,8 @@ public:
  int playhead() const noexcept {return playhead_;}
  void setVariationFromPixel(int x);
  void setGateFromPixel(int x);
+ void beginGateGesture();
+ void endGateGesture();
  int gate() const noexcept {return gate_;}
  void dragNumeric(int index,int row,int startingValue,int upwardPixels);
 private:
@@ -87,6 +89,7 @@ private:
  int bar_{0};
  int variationTurn_{0};
  int gate_{100};
+ bool gateGestureOpen_{false};
  int playhead_{16};
  double zoom_{1.0};
  const char* status_{"READY"};
