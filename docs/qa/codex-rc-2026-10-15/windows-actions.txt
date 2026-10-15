@@ -1,0 +1,35 @@
+Public GitHub Actions observation, 2026-10-15 UTC
+Run: https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38787724599
+Head: 4ef178d00c16f24c09e9b3f77214e76a635b77da
+Implementation: b269552ac88f58b106f79554d5288f6da8630087
+Job: 116603954547; duration 3m10s
+
+Set up job: success
+Run actions/checkout@v4: success
+Check complete local source coverage: success
+Configure Steinberg SDK 3.8.1 Windows x64: success
+Build experimental GUI VST3 and 19 C++ tests: success
+Run all Windows core and GUI regressions: success
+Verify twelve independent MIDI exports: success
+Build original Steinberg VST3 Validator: success
+Stage complete branded GUI VST3: success
+Build independent VST3 host lifecycle / state probe: success
+Probe native state and twenty Windows editor lifecycles: success
+Steinberg Validator on native GUI bundle: success
+Record candidate binary checksums: success
+Archive experimental GUI plugin (NOT FINAL): success
+Publish precise QA job summary: success
+Post Run actions/checkout@v4: success
+Complete job: success
+
+Artifact ID: 11998965328
+Name: 125A-EBM-v0.2-CODEX-RC-Windows-x64
+Displayed size: 1.63 MB
+GitHub archive SHA256: c17f82a6a98ecf76b8cd1c695ca1d144dc0d6ef204586b1a794f7c6ae0d393fe
+
+Evidence scope: public run/job HTML confirms step conclusions. Detailed logs, job
+summary and artifact payload require GitHub login and were not independently
+downloaded in this cloud session. Do not interpret the archive digest as the
+inner plugin binary hash. SHA256SUMS.txt and raw Windows logs are in the artifact.
+One infrastructure warning: checkout@v4/upload-artifact@v4 Node20 deprecation;
+GitHub forced Node24. All steps succeeded; no rerun performed.

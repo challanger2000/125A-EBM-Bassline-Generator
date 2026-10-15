@@ -9,3 +9,7 @@
 - No approved new FINAL/Gumroad release. New binary requires owner 125A Plugin
   Tester v0.2.10 FINAL and Studio One 8.1.2 acceptance; do not reuse the old
   binary's reported Tester PASS for this candidate.
+
+- Windows QA: [run 38787724599 — PASS](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38787724599).
+- [Download RC ZIP (GitHub login)](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38787724599#artifacts), artifact 11998965328.
+- Built source `4ef178d00c16f24c09e9b3f77214e76a635b77da`; implementation `b269552ac88f58b106f79554d5288f6da8630087`.

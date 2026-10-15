@@ -1,7 +1,10 @@
 # Local RC evidence — 2026-10-15
 
-These are actual Linux x86_64 results, not Windows or Studio One results.
-GCC 14.2, CMake 3.31, Release; AMD EPYC 9V74, 5 available CPUs.
+Trailing whitespace in the validator transcript was normalized for Git hygiene.
+The local transcripts are actual Linux x86_64 results, not Studio One results.
+`windows-actions.txt` separately records the successful Windows job and artifact
+metadata observed from public GitHub HTML, including its evidence limitations.
+GCC 14.2, CMake 4.4.4, Release; AMD EPYC 9V74, 5 available CPUs.
 
 - `ctest.txt`: all 19 suites, no skipped tests.
 - `repair-tests.txt`: tuple/control/event/parser/export regressions and zero
