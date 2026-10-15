@@ -93,7 +93,15 @@ inline int guiChecks(HWND window,int zoom,Steinberg::Vst::IComponent* component,
  click(612,200);GUI_CHECK(!IsWindowVisible(numericOverlay));
  GUI_CHECK(read(observed)&&observed.editable.steps[0].length==1);
 
- GUI_CHECK(type(231,372,L"12x"));GUI_CHECK(read(observed)&&observed.editable.steps[0].velocity==101);
+ // An impossible LENGTH 9 overlaps the next enabled note at step 3.
+ // The input must disappear and must not modify stored LENGTH.
+ GUI_CHECK(reset());
+ GUI_CHECK(type(231,423,L"9"));
+ HWND invalidOverlay=nullptr;EnumChildWindows(gui,findEdit,reinterpret_cast<LPARAM>(&invalidOverlay));
+ GUI_CHECK(invalidOverlay&&!IsWindowVisible(invalidOverlay));
+ GUI_CHECK(read(observed)&&observed.editable.steps[0].length==16);
+ GUI_CHECK(type(231,372,L"12x"));GUI_CHECK(read(observed)&&observed.editable.steps[0].velocity==100);
+ GUI_CHECK(!IsWindowVisible(invalidOverlay));
  GUI_CHECK(processorPoint->disconnect(controllerPoint)==kResultOk);GUI_CHECK(controllerPoint->disconnect(processorPoint)==kResultOk);
  processorPoint->release();controllerPoint->release();controller->setComponentHandler(nullptr);handler->release();
  std::printf("PASS native GUI %d%%: actual NOTE toggles, Dirty, STYLE reset LOCK, Gate drag gesture, wheel, actual Win32 EDIT typing and malformed rejection\n",zoom);
