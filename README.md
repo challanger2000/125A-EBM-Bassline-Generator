@@ -2,7 +2,7 @@
 
 **125A EBM Bassline Generator V1.0.0 — Windows x64 MIDI-only VST3.**
 
-Release source: `release/v1.0.0-windows`. The owner has broadly accepted the practical Studio One behavior. The predecessor automated Windows QA passed; see [CURRENT.md](CURRENT.md) for exact verified provenance and remaining release gates. A separately compiled version-labelled V1 binary is required.
+**V1.0.0 OWNER-APPROVED FINAL — verified Windows build:** [Actions #38813280258](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38813280258) · [V1.0.0 VST3 artifact](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38813280258/artifacts/12009193326). Exact tested source `586ebe2c0d8fa39da4ed10f5deb8b6b33a3a34c9` on `release/v1.0.0-windows`. [CURRENT.md](CURRENT.md) and [AGENTS.md](AGENTS.md) pin the release; the owner accepted the predecessor's Studio One behavior, but a separate host test of the version-labelled V1 and local Plugin Tester run are not documented. GitHub Release/Gumroad publication not verified.
 
 Current implementation, all 15 repair findings, compatibility and measured QA:
 [`docs/FINAL-QA-CODEX-RC-2026-10-15.md`](docs/FINAL-QA-CODEX-RC-2026-10-15.md).
