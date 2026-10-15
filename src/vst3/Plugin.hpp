@@ -17,6 +17,7 @@ using namespace Steinberg::Vst;
 static const FUID ProcessorUID(0x125AEB01,0x45424D42,0x4153534C,0x00020001);
 static const FUID ControllerUID(0x125AEB02,0x45424D42,0x4153534C,0x00020001);
 constexpr ParamID TriggerModeId=100;
+constexpr ParamID PlayheadStepId=101; // read-only host-fed GUI position
 class Processor final:public AudioEffect {
 public:
  Processor();
@@ -34,6 +35,7 @@ private:
  host::Model model_{};
  std::atomic<bool> cleanupPending_{false};
  double sampleRate_=44100.;
+ int reportedStep_=-1;
 };
 class EbmPanel;
 class Controller final:public EditController,public VSTGUI::VST3EditorDelegate,public VSTGUI::IControlListener {
@@ -58,6 +60,7 @@ public:
  void valueChanged(VSTGUI::CControl*) override;
  const edit::Pattern& pattern() const noexcept {return editable_;}
  const char* help() const noexcept {return help_;}
+ int playhead() const noexcept {return playhead_;}
  void setVariationFromPixel(int x);
 private:
  bool transact(v2::Session next,live::Mode mode,edit::Pattern pattern);
@@ -78,6 +81,7 @@ private:
  VSTGUI::VST3Editor* editor_{};
  EbmPanel* panel_{};
  int bar_{0};
+ int playhead_{16};
  double zoom_{1.0};
  const char* status_{"READY"};
 };

@@ -111,7 +111,11 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
    }else if(r==0&&n.locked)label(dc,"LOCK",x,y+12,49,24,hot,true);
   }
  }
- for(int c=0;c<16;++c)label(dc,std::to_string(c+1),ui::gridX+c*ui::cellW,222,49,20,faint,true);
+ for(int c=0;c<16;++c){
+  label(dc,std::to_string(c+1),ui::gridX+c*ui::cellW,222,49,20,faint,true);
+  if(owner_->playhead()==c)
+   fill(dc,ui::gridX+c*ui::cellW,244,49,5,hot,hot);
+ }
  fill(dc,20,483,1060,69,well);
  struct Command{int x,w;const char* title;};
  const Command actions[]={{24,180,"GENERATE"},{210,135,"VARIATE"},

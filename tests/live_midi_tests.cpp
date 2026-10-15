@@ -119,7 +119,7 @@ int main(){
     seek.projectPpq=10.;sink.origin=100;
     CHECK(transport.process(p,seek,nullptr,0,sink));
     CHECK(!sink.data[1].on && sink.data[1].sample==100);
-    // Held trigger survives live pattern edit: release active voice but retain phase/owner.
+    // Held trigger survives an edit without truncating the already ringing note.
     Runtime live;
     live.setMode(Mode::MidiNote);
     Sink edits;
@@ -130,8 +130,8 @@ int main(){
     const int before=edits.count;
     liveBlock.revision=11;edits.origin=30;
     CHECK(live.process(p,liveBlock,nullptr,0,edits));
-    CHECK(live.triggerHeld() && edits.count==before+1);
-    CHECK(!edits.data[static_cast<std::size_t>(before)].on && edits.data[static_cast<std::size_t>(before)].sample==30);
+    CHECK(live.triggerHeld() && edits.count==before);
+    CHECK(live.activePitch()==36); // edit does not cut the held note
     // Simulated output bus rejection: retry NoteOff and only then move onward.
     Runtime backpressure;
     Sink reject;

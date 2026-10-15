@@ -62,6 +62,7 @@ public:
     void setMode(live::Mode mode) noexcept;
     live::Mode mode() const noexcept;
     int songStartBar() const noexcept {return songStart_.load(std::memory_order_acquire);}
+    int playheadStep() const noexcept {return runtime_.playheadStep();}
     void resetRuntime() noexcept; // only after output bus disconnect
     template<class Sink>
     bool process(live::Block block,const live::Trigger* triggers,int count,Sink&& sink) noexcept {

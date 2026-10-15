@@ -16,7 +16,7 @@ bool prepare(const Phrase& phrase,Pattern& dest) noexcept {
         auto& start=candidate.cells[static_cast<std::size_t>(note.step)];
         auto& end=candidate.cells[static_cast<std::size_t>((note.step+note.duration)%length)];
         if (start.onPitch!=-1 || end.offPitch!=-1)return false;
-        start.onPitch=note.pitch;start.velocity=note.velocity;
+        start.onPitch=note.pitch;start.velocity=note.velocity;start.duration=note.duration;
         end.offPitch=note.pitch;
     }
     candidate.ready=true;

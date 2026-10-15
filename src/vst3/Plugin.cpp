@@ -149,7 +149,25 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         }
         model_.setMode(wanted);
     }
-    return model_.process(block,triggers,count,sink)?kResultOk:kResultFalse;
+    if(!model_.process(block,triggers,count,sink))return kResultFalse;
+    int step=16; // 16 is "not playing" for this 0..16 read-only parameter.
+    if(model_.mode()==live::Mode::Transport&&block.playing&&block.ppqValid&&block.tempoValid &&
+       std::isfinite(block.projectPpq)&&block.projectPpq>=0.){
+        const auto tick=static_cast<std::int64_t>(std::floor(block.projectPpq*4.));
+        step=static_cast<int>(tick%16);
+    }else if(model_.mode()==live::Mode::MidiNote){
+        const auto current=model_.playheadStep();
+        if(current>=0)step=current;
+    }
+    if(step!=reportedStep_&&data.outputParameterChanges){
+        int32 queueIndex=0;
+        auto* q=data.outputParameterChanges->addParameterData(PlayheadStepId,queueIndex);
+        if(q){int32 point=0;
+          if(q->addPoint(0,static_cast<double>(step)/16.,point)==kResultOk)
+            reportedStep_=step;
+        }
+    }
+    return kResultOk;
 }
 
 tresult PLUGIN_API Processor::notify(IMessage* msg){
@@ -209,6 +227,9 @@ tresult PLUGIN_API Controller::setState(IBStream* stream){
 }
 tresult PLUGIN_API Controller::setParamNormalized(ParamID id,ParamValue v){
  const auto result=EditController::setParamNormalized(id,v);
+ if(result==kResultOk&&id==PlayheadStepId&&std::isfinite(v)){
+  playhead_=std::clamp(static_cast<int>(std::floor(v*16.+0.5)),0,16);redraw();
+ }
  if(result==kResultOk&&id==TriggerModeId&&std::isfinite(v)){
   mode_=v<0.5?live::Mode::Transport:live::Mode::MidiNote;
   redraw();

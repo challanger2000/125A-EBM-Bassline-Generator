@@ -14,6 +14,7 @@ struct GridCell {
     int onPitch = -1;
     int offPitch = -1;
     int velocity = 0;
+    int duration = 0; // gate in sixteenth steps, cached at NoteOn for edit continuity
 };
 struct Pattern {
     static constexpr int maxSteps = 128; // 8 bars, 16 sixteenths per bar
@@ -50,9 +51,10 @@ public:
     Mode mode() const noexcept { return mode_; }
     int activePitch() const noexcept { return activePitch_; }
     bool triggerHeld() const noexcept { return triggerHeld_; }
+    int playheadStep() const noexcept {return triggerHeld_?static_cast<int>(std::floor(triggerPhase_))%16:-1;}
     // reset() ONLY after output disconnection/deactivation, not for live edits.
     void reset() noexcept {
-        activePitch_=-1; triggerHeld_=false; triggerPitch_=-1;
+        activePitch_=-1; activeOffStep_=-1;triggerHeld_=false; triggerPitch_=-1;
         triggerPhase_=0.;expectedPpq_=0.;haveExpected_=false;
         haveRevision_=false; failedOff_=false; seenMode_=mode_;
     }
@@ -76,8 +78,12 @@ public:
             haveExpected_=false;seenMode_=mode_;
         }
         if (!haveRevision_ || block.revision!=seenRevision_) {
-            if (haveRevision_ && !release(0,sink)) return false; // keep trigger/phase, release only voice
-            haveRevision_=true;seenRevision_=block.revision;
+            // Same-length revisions must not cut a currently ringing note:
+            // keep the end step cached when that NoteOn was emitted.
+            // A length change invalidates the cached modulo position, so send
+            // one safe release without resetting trigger ownership or phase.
+            if (haveRevision_ && seenLength_!=pattern.lengthSteps && !release(0,sink)) return false;
+            haveRevision_=true;seenRevision_=block.revision;seenLength_=pattern.lengthSteps;
             // In MidiNote mode retain the held trigger and musical phase.
         }
         const double rate=(block.tempo*4.)/(60.*block.sampleRate); // sixteenths per sample
@@ -141,7 +147,7 @@ private:
     template<class Sink> bool release(int offset,Sink& sink) noexcept {
         if (activePitch_<0) { failedOff_=false;return true; }
         if (!sink(Output{offset,activePitch_,0,false})) { failedOff_=true;return false; }
-        activePitch_=-1;failedOff_=false;return true;
+        activePitch_=-1;activeOffStep_=-1;failedOff_=false;return true;
     }
     void advance(int samples,double rate,int length) noexcept {
         triggerPhase_=std::fmod(triggerPhase_+samples*rate,static_cast<double>(length));
@@ -166,19 +172,20 @@ private:
             const int local=static_cast<int>(std::ceil(relative-1.e-8));
             if (local<0 || local>=count)continue;
             const auto& cell=pattern.cells[static_cast<std::size_t>(grid%pattern.lengthSteps)];
-            if (cell.offPitch>=0 && cell.offPitch==activePitch_) {
+            if (activePitch_>=0 && activeOffStep_==grid%pattern.lengthSteps) {
                 if (!release(offset+local,sink))return false;
             }
             if (cell.onPitch>=0) {
                 if (!release(offset+local,sink))return false;
                 if (!sink(Output{offset+local,cell.onPitch,cell.velocity,true}))return false;
                 activePitch_=cell.onPitch;
+                activeOffStep_=static_cast<int>((grid+cell.duration)%pattern.lengthSteps);
             }
         }
         return true;
     }
     Mode mode_=Mode::Transport,seenMode_=Mode::Transport;
-    int activePitch_=-1,triggerPitch_=-1;
+    int activePitch_=-1,activeOffStep_=-1,triggerPitch_=-1,seenLength_=0;
     bool triggerHeld_=false,haveExpected_=false,failedOff_=false,haveRevision_=false;
     double triggerPhase_=0.,expectedPpq_=0.;
     std::uint64_t seenRevision_=0;

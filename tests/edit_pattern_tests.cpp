@@ -82,5 +82,35 @@ int main(){
   CHECK(live.process(block,&release,1,sink));
   CHECK(ons==offs);
  }
+ // A live edit to a future step must not cut a note that was already
+ // sounding; it ends at its original gate even if the MIDI plan was swapped.
+ {
+  ebm::host::Model live;
+  auto doc=live.snapshot();
+  doc.mode=ebm::live::Mode::MidiNote;
+  doc.editable=ebm::edit::Pattern{};
+  doc.editable.enabled=true;doc.editable.bars=1;
+  CHECK(ebm::edit::modify(doc.editable,0,36,100,2));
+  CHECK(live.restore(doc));
+  ebm::live::Block block{};block.samples=6000;block.sampleRate=48000;block.tempo=120;
+  const ebm::live::Trigger start{0,62,true};
+  int on=0,off=0;
+  auto sink=[&](ebm::live::Output e)noexcept -> bool {
+   if(e.on)++on;else ++off;return true;
+  };
+  CHECK(live.process(block,&start,1,sink));
+  CHECK(on==1&&off==0);
+  CHECK(ebm::edit::modify(doc.editable,3,40,80,1));
+  CHECK(live.restore(doc));
+  CHECK(live.process(block,nullptr,0,sink)); // step 1: old note still held
+  CHECK(on==1&&off==0);
+  CHECK(live.process(block,nullptr,0,sink)); // step 2: original NoteOff
+  CHECK(on==1&&off==1);
+  CHECK(live.process(block,nullptr,0,sink)); // step 3: edited note
+  CHECK(on==2&&off==1);
+  const ebm::live::Trigger stop{0,62,false};
+  CHECK(live.process(block,&stop,1,sink));
+  CHECK(on==off);
+ }
  std::cout<<"editable MIDI pattern contract PASS\n";
 }
