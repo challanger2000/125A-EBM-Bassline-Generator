@@ -590,6 +590,18 @@ void Controller::exportMidi(){
 void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
  using ui::Target;
  const auto target=ui::hit(x,y);const int index=bar_*16+target.column;
+ // Numeric edits are transient overlays, not a persistent part of the step
+ // grid. Any distinct command/cell click closes the previous editor before
+ // the new target is handled; the stored value remains the source of truth.
+ if(textInput_&&editIndex_>=0){
+  const bool sameCell=(target.target==ui::Target::Velocity||target.target==ui::Target::Length)&&
+      target.row==editRow_&&index==editIndex_;
+  const bool sameGate=target.target==ui::Target::Gate&&editRow_==4;
+  const bool sameVariation=target.target==ui::Target::Variation&&editRow_==5;
+  if(!sameCell&&!sameGate&&!sameVariation){
+   textInput_->setVisible(false);editIndex_=-1;editRow_=-1;
+  }
+ }
  switch(target.target){
  case Target::Style:if(ctrl){auto next=session_;next.setStyle(Style::ClassicEBM);
    (void)next.generate();auto pat=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
