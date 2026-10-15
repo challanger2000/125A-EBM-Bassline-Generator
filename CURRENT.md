@@ -1,15 +1,26 @@
-# 125A EBM Bassline Generator V1.0.0 — Windows x64
+# CURRENT FINAL — 125A EBM Bassline Generator V1.0.0 (Windows x64 VST3)
 
-Release candidate source branch: `release/v1.0.0-windows`.
+**Owner decision (2026-10-15): V1.0.0 is the accepted final version.**
 
-## Provenance and acceptance
+## Authoritative Windows V1.0.0 binary — verified
 
-The V1 branch was created from verified v0.2 source commit `3a7844177496673fdf8e97bd72ebd10610753366`.
-The original Windows QA completed successfully in [Actions #38810975861](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38810975861); artifact `12009275253`, archive SHA-256 `f35ba15a24bcc7d9e0942cc8cbcb930a3518b5b86b64193bff04607ef079f51c`.
-This validates the precursor binary, **not** the new V1 version-labelled binary.
+- **Release source branch:** `release/v1.0.0-windows`
+- **EXACT BUILT SOURCE COMMIT:** `586ebe2c0d8fa39da4ed10f5deb8b6b33a3a34c9`
+- **Windows Actions run:** [#38813280258](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38813280258) — **SUCCESS**
+- **Exact artifact ID:** `12009193326`
+- **Artifact name:** `125A-EBM-V1-v1.0.0-Windows-x64-VST3`
+- **Direct artifact page:** https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38813280258/artifacts/12009193326
+- **Artifact archive SHA-256:** `beccd5b3c13cbb2c843452c16a777b9c81c3706805a038da5a659eb96a5efdea`
+- **Automated QA:** Windows VST3 compile, 19 C++ regressions, 12 MIDI exports, native GUI and editor lifecycle, Steinberg Validator — PASS per successful workflow steps.
+- **Owner's DAW feedback:** “geht soweit wohl alles” and explicit request to declare V1.0.0. This feedback refers to the preceding functionally corresponding v0.2 candidate; **a separate owner-local test of the version-labelled V1 binary is not documented**.
+- **125A Plugin Tester local V1 run:** NOT VERIFIED.
+- **GitHub Release object/tag:** NOT VERIFIED / not published by this documentation change.
+- **Customer Gumroad ZIP/publication:** NOT VERIFIED; no customer ZIP is claimed.
 
-Owner states the Studio One practical test broadly works and requests promotion to V1. Exact 125A Plugin Tester local results have not been provided and are **NOT VERIFIED**.
+## Release preservation rules
 
-The V1 Windows build and its precise source SHA, artifact ID, archive digest, Validator and GUI test results must be recorded after its new workflow completes. Do not claim V1 compiled/FINAL until then.
+This is the **canonical pinned V1.0.0 FINAL record**. Later development or cosmetic documentation commits on this branch are NOT a replacement for the exact built source above. Never infer build provenance from branch HEAD alone.
 
-Historical candidate and phase QA documents remain under `docs/`. The 0.2 build remains available as a rollback baseline.
+Retain earlier successful v0.2 Windows source `3a7844177496673fdf8e97bd72ebd10610753366` and [run #38810975861](https://github.com/challanger2000/125A-EBM-Bassline-Generator/actions/runs/38810975861) as the rollback baseline.
+
+For future releases, update this record only after a new successful Windows build and the owner's acceptance. Do not overwrite or mislabel archived versions.
