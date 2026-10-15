@@ -119,7 +119,7 @@ int main(int argc,char** argv){
  WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=DefWindowProcW;
  wc.lpszClassName=cls;
  CHECK(RegisterClassW(&wc)!=0);
- for(int n=0;n<5;++n){
+ for(int n=0;n<20;++n){
   HWND window=CreateWindowExW(0,cls,L"125A EBM QA",WS_OVERLAPPEDWINDOW,
                  50,50,1710,940,nullptr,nullptr,wc.hInstance,nullptr);
   CHECK(window!=nullptr);
@@ -139,7 +139,7 @@ int main(int argc,char** argv){
   CHECK(view->removed()==kResultTrue);
   view->setFrame(nullptr);view->release();frame->release();DestroyWindow(window);
  }
- std::cout<<"PASS native VST3: event buses, document message to Processor, corrupted rejection, persistent GUI 150%, five Win32 editor attach/detach cycles\n";
+ std::cout<<"PASS native VST3: event buses, document message to Processor, corrupted rejection, persistent GUI 150%, twenty Win32 editor attach/detach cycles\n";
  return 0;
 }
 #else
