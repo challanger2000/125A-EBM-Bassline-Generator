@@ -25,34 +25,59 @@ void label(CDrawContext* dc,const std::string& s,int x,int y,int w,int h,CColor 
 std::string pitch(int note){
  constexpr const char* name[]{"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
  if(note<0||note>127)return "--";
- return std::string(name[note%12])+std::to_string(note/12-1);
+ return std::string(name[note%12])+std::to_string(edit::studioOneOctave(note));
 }
-const char* scaleName(edit::Scale scale){
- switch(scale){case edit::Scale::Major:return "MAJOR";case edit::Scale::NaturalMinor:return "NAT MINOR";default:return "CHROMATIC";}
-}
+
 }
 EbmPanel::EbmPanel(const VSTGUI::CRect& bounds,Controller* owner):VSTGUI::CView(bounds),owner_(owner){setTransparency(false);}
 VSTGUI::CMouseEventResult EbmPanel::onMouseDown(VSTGUI::CPoint& p,const VSTGUI::CButtonState& buttons){
  if(!owner_||!(buttons&VSTGUI::kLButton))return VSTGUI::kMouseEventNotHandled;
  const int x=static_cast<int>(p.x-getViewSize().left),y=static_cast<int>(p.y-getViewSize().top);
- if(ui::hit(x,y).target==ui::Target::Variation&&!(buttons&VSTGUI::kControl)){
+ const auto hit=ui::hit(x,y);
+ pressed_=hit.target;pressedColumn_=hit.column;
+ if(ui::isCommand(hit.target))lastAction_=hit.target;
+ invalid();
+ if(hit.target==ui::Target::Variation&&!(buttons&VSTGUI::kControl)){
   dragging_=true;owner_->setVariationFromPixel(x);return VSTGUI::kMouseEventHandled;
+ }
+ if((hit.target==ui::Target::Velocity||hit.target==ui::Target::Length)&&
+    !(buttons&VSTGUI::kControl)&&!(buttons&VSTGUI::kDoubleClick)){
+  const int ix=owner_->bar()*16+hit.column;
+  const auto& note=owner_->pattern().steps[static_cast<std::size_t>(ix)];
+  if(note.on&&!note.locked){
+   draggingNumeric_=true;dragIndex_=ix;dragRow_=hit.row;dragY_=y;
+   dragBase_=hit.target==ui::Target::Velocity?note.velocity:note.length;
+   return VSTGUI::kMouseEventHandled;
+  }
  }
  owner_->click(x,y,(buttons&VSTGUI::kControl)!=0,(buttons&VSTGUI::kShift)!=0,
                (buttons&VSTGUI::kDoubleClick)!=0);
- return VSTGUI::kMouseDownEventHandledButDontNeedMovedOrUpEvents;
+ // Capture the matching mouse-up, so every button has an actual pressed state.
+ return VSTGUI::kMouseEventHandled;
 }
-VSTGUI::CMouseEventResult EbmPanel::onMouseMoved(VSTGUI::CPoint& p,const VSTGUI::CButtonState&){
+VSTGUI::CMouseEventResult EbmPanel::onMouseMoved(VSTGUI::CPoint& p,const VSTGUI::CButtonState& buttons){
  if(!owner_)return VSTGUI::kMouseEventNotHandled;
  const int x=static_cast<int>(p.x-getViewSize().left),y=static_cast<int>(p.y-getViewSize().top);
  if(dragging_){owner_->setVariationFromPixel(x);return VSTGUI::kMouseEventHandled;}
+ if(draggingNumeric_){
+  if(!(buttons&VSTGUI::kLButton)){
+   draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();return VSTGUI::kMouseEventHandled;
+  }
+  owner_->dragNumeric(dragIndex_,dragRow_,dragBase_,dragY_-y);
+  return VSTGUI::kMouseEventHandled;
+ }
+ if(pressed_!=ui::Target::None)return VSTGUI::kMouseEventHandled;
  owner_->hover(x,y);return VSTGUI::kMouseEventNotHandled;
 }
 VSTGUI::CMouseEventResult EbmPanel::onMouseUp(VSTGUI::CPoint&,const VSTGUI::CButtonState&){
- if(!dragging_)return VSTGUI::kMouseEventNotHandled;
- dragging_=false;return VSTGUI::kMouseEventHandled;
+ const bool handled=pressed_!=ui::Target::None||dragging_||draggingNumeric_;
+ dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
+ return handled?VSTGUI::kMouseEventHandled:VSTGUI::kMouseEventNotHandled;
 }
-VSTGUI::CMouseEventResult EbmPanel::onMouseCancel(){dragging_=false;return VSTGUI::kMouseEventHandled;}
+VSTGUI::CMouseEventResult EbmPanel::onMouseCancel(){
+ dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
+ return VSTGUI::kMouseEventHandled;
+}
 void EbmPanel::draw(VSTGUI::CDrawContext* dc){
  using namespace VSTGUI;
  if(!owner_)return;
@@ -64,7 +89,7 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
  fill(dc,20,18,1060,63,well);
  label(dc,"EBM BASSLINE GENERATOR",230,25,620,35,foreground,true,true);
  label(dc,"V0.2  /  EDITABLE MIDI BASSLINE",230,58,620,17,faint,true);
- fill(dc,974,25,102,35,accent,hot);
+ fill(dc,974,25,102,35,pressed_==ui::Target::Zoom?hot:accent,hot);
  label(dc,owner_->zoom()>1.25?"ZOOM 150%":"ZOOM 100%",975,32,100,20,foreground,true);
  fill(dc,20,93,1060,82,well);
  struct Field{int x,w;const char* title;std::string value;};
@@ -72,13 +97,15 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
   {24,172,"STYLE  v",styleName(cfg.style)},
   {206,108,"BARS  v",std::to_string(p.bars)},
   {324,135,"KEY / ROOT  v",pitch(cfg.rootMidi)},
-  {469,136,"SCALE  v",scaleName(p.scale)},
+  {469,136,"SCALE  v",edit::scaleName(p.scale)},
   {615,166,"VARIATION",std::to_string(cfg.variation)+" %"},
   {791,123,"SONG START  v",std::to_string(p.songStartBar)},
   {924,152,"TRIGGER",owner_->mode()==live::Mode::Transport?"TRANSPORT":"MIDI NOTE"}
  }};
  for(const auto& field:fields){
-  fill(dc,field.x,102,field.w,65,backdrop);
+  const auto target=ui::hit(field.x+field.w/2,134).target;
+  fill(dc,field.x,102,field.w,65,pressed_==target?accent:backdrop,
+       pressed_==target?hot:edge);
   label(dc,field.title,field.x+9,109,field.w-16,17,faint);
   label(dc,field.value,field.x+9,131,field.w-16,25,foreground);
  }
@@ -87,12 +114,13 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
  fill(dc,std::clamp(628+cfg.variation*141/100-4,628,760),152,9,13,hot,hot);
  fill(dc,20,187,1060,288,well);
  label(dc,"BAR",25,191,75,17,faint);
- fill(dc,27,207,44,37,card);label(dc,"<",27,217,44,20,foreground,true);
+ fill(dc,27,207,44,37,pressed_==ui::Target::PrevBar?accent:card);label(dc,"<",27,217,44,20,foreground,true);
  label(dc,std::to_string(current+1)+" / "+std::to_string(p.bars),76,217,82,20,foreground,true);
- fill(dc,160,207,44,37,card);label(dc,">",160,217,44,20,foreground,true);
+ fill(dc,160,207,44,37,pressed_==ui::Target::NextBar?accent:card);label(dc,">",160,217,44,20,foreground,true);
  for(int b=0;b<p.bars;++b){
-  fill(dc,550+b*62,209,58,32,b==current?accent:card,b==current?hot:edge);
-  label(dc,std::to_string(b+1),550+b*62,216,58,17,foreground,true);
+  fill(dc,550+b*62,190,58,24,
+       (pressed_==ui::Target::Bar&&pressedColumn_==b)?hot:(b==current?accent:card),b==current?hot:edge);
+  label(dc,std::to_string(b+1),550+b*62,193,58,18,foreground,true);
  }
  const char* rowNames[]{"NOTE ON","PITCH","VELOCITY","LENGTH"};
  for(int r=0;r<4;++r){
@@ -121,11 +149,17 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
  const Command actions[]={{24,180,"GENERATE"},{210,135,"VARIATE"},
   {351,90,"CLEAR"},{447,110,"COPY BAR"},{563,110,"PASTE BAR"},{679,397,"EXPORT MIDI"}};
  for(const auto& action:actions){
-  fill(dc,action.x,492,action.w,53,action.x==24?accent:card,action.x==24?hot:edge);
+  const auto hit=ui::hit(action.x+action.w/2,517).target;
+  const bool down=pressed_==hit, recentlyClicked=lastAction_==hit;
+  fill(dc,action.x,492,action.w,53,down?hot:(recentlyClicked?accent:(action.x==24?accent:card)),
+       down?foreground:(recentlyClicked?hot:(action.x==24?hot:edge)));
   label(dc,action.title,action.x,509,action.w,21,foreground,true);
+  // Persistent confirmation marker makes fast clicks visible even when the
+  // host coalesces mouse-down/up repaints in one frame.
+  if(recentlyClicked&&!down)fill(dc,action.x+action.w-15,498,8,8,hot,hot);
  }
- label(dc,std::string("HELP: ")+owner_->help(),27,555,850,17,faint);
- label(dc,std::string("STATUS: ")+owner_->status(),870,555,204,17,faint,true);
+ label(dc,std::string("HELP: ")+owner_->help(),27,555,710,17,faint);
+ label(dc,std::string("STATUS: ")+owner_->status(),745,555,330,17,faint,true);
  setDirty(false);
 }
 } // namespace ebm::vst3

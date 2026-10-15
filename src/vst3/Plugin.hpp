@@ -62,6 +62,7 @@ public:
  const char* help() const noexcept {return help_;}
  int playhead() const noexcept {return playhead_;}
  void setVariationFromPixel(int x);
+ void dragNumeric(int index,int row,int startingValue,int upwardPixels);
 private:
  bool transact(v2::Session next,live::Mode mode,edit::Pattern pattern);
  bool commitEdit(edit::Pattern pattern);
@@ -81,6 +82,7 @@ private:
  VSTGUI::VST3Editor* editor_{};
  EbmPanel* panel_{};
  int bar_{0};
+ int variationTurn_{0};
  int playhead_{16};
  double zoom_{1.0};
  const char* status_{"READY"};

@@ -6,7 +6,30 @@
 
 namespace ebm::edit {
 constexpr int kMaxBars=8, kStepsPerBar=16, kMaxSteps=kMaxBars*kStepsPerBar;
-enum class Scale : std::uint8_t { Chromatic=0, Major=1, NaturalMinor=2 };
+// Values 0..2 are part of the existing version-2 project state; never reorder.
+enum class Scale : std::uint8_t {
+    Chromatic=0, Major=1, NaturalMinor=2, HarmonicMinor=3,
+    MelodicMinor=4, Dorian=5, Phrygian=6, Mixolydian=7,
+    Lydian=8, MinorPentatonic=9
+};
+inline constexpr int kScaleCount=10;
+// Studio One uses middle C (MIDI 60) = C3 in its piano roll.
+inline constexpr int studioOneOctave(int midi) noexcept {return midi/12-2;}
+inline const char* scaleName(Scale scale) noexcept {
+    switch(scale){
+    case Scale::Chromatic:return "CHROMATIC";
+    case Scale::Major:return "MAJOR";
+    case Scale::NaturalMinor:return "NATURAL MINOR";
+    case Scale::HarmonicMinor:return "HARMONIC MINOR";
+    case Scale::MelodicMinor:return "MELODIC MINOR";
+    case Scale::Dorian:return "DORIAN";
+    case Scale::Phrygian:return "PHRYGIAN";
+    case Scale::Mixolydian:return "MIXOLYDIAN";
+    case Scale::Lydian:return "LYDIAN";
+    case Scale::MinorPentatonic:return "MINOR PENTATONIC";
+    }
+    return "INVALID";
+}
 struct Step {
     bool on=false;
     std::uint8_t pitch=36,velocity=100,length=1;
@@ -20,18 +43,27 @@ struct Pattern {
 };
 inline bool valid(const Pattern& p) noexcept {
     if(p.bars!=1&&p.bars!=2&&p.bars!=4&&p.bars!=8)return false;
-    if(p.songStartBar<1||p.songStartBar>9999||static_cast<int>(p.scale)>2)return false;
+    if(p.songStartBar<1||p.songStartBar>9999||static_cast<int>(p.scale)>=kScaleCount)return false;
     for(const auto& s:p.steps)
         if(s.pitch>127||s.velocity<1||s.velocity>127||s.length<1||s.length>128)return false;
     return true;
 }
 inline bool inScale(int midi,int tonic,Scale scale) noexcept {
-    if(midi<0||midi>127)return false;
+    if(midi<0||midi>127||static_cast<int>(scale)>=kScaleCount)return false;
     if(scale==Scale::Chromatic)return true;
-    static constexpr int major[]={0,2,4,5,7,9,11};
-    static constexpr int minor[]={0,2,3,5,7,8,10};
-    const int interval=(midi-tonic%12+120)%12;
-    for(int n:scale==Scale::Major?major:minor)if(n==interval)return true;
+    static constexpr int intervals[9][12] = {
+      {0,2,4,5,7,9,11,-1,-1,-1,-1,-1},   // Major
+      {0,2,3,5,7,8,10,-1,-1,-1,-1,-1},   // Natural minor
+      {0,2,3,5,7,8,11,-1,-1,-1,-1,-1},   // Harmonic minor
+      {0,2,3,5,7,9,11,-1,-1,-1,-1,-1},   // Melodic minor (ascending)
+      {0,2,3,5,7,9,10,-1,-1,-1,-1,-1},   // Dorian
+      {0,1,3,5,7,8,10,-1,-1,-1,-1,-1},   // Phrygian
+      {0,2,4,5,7,9,10,-1,-1,-1,-1,-1},   // Mixolydian
+      {0,2,4,6,7,9,11,-1,-1,-1,-1,-1},   // Lydian
+      {0,3,5,7,10,-1,-1,-1,-1,-1,-1,-1} // Minor pentatonic
+    };
+    const int degree=((midi-(tonic%12))%12+12)%12;
+    for(const int v:intervals[static_cast<int>(scale)-1])if(v==degree)return true;
     return false;
 }
 inline int nearestPitch(int midi,int tonic,Scale scale) noexcept {
@@ -68,6 +100,77 @@ inline Pattern fromPhrase(const Phrase& phrase,int bars,Scale scale=Scale::Chrom
         s.length=static_cast<std::uint8_t>(std::clamp(n.duration,1,128));
     }
     return result;
+}
+// Generator phrases are composed chromatically by the original grammar.
+// Quantize only unlocked, active notes on the control thread, never in process().
+inline void conformToScale(Pattern& p,int tonic) noexcept {
+    for(auto& st:p.steps)if(st.on&&!st.locked)
+        st.pitch=static_cast<std::uint8_t>(nearestPitch(st.pitch,tonic,p.scale));
+}
+
+// GUI VARIATE operates on the ACTUAL selected 1/2/4/8-bar pattern, not on
+// hidden source bars 3/4 of the four-bar composer. One visible edit per click,
+// with four musical operations and a safe accent fallback. Entirely non-RT.
+enum class VariationEdit {None,Accent,Pitch,Gate,Timing};
+inline VariationEdit variateVisible(Pattern& p,int intensity,int turn,int tonic,int bar) noexcept {
+    if(!valid(p)||intensity<=0||intensity>100||bar<0||bar>=p.bars)return VariationEdit::None;
+    int active[16]{};int count=0;
+    for(int col=0;col<16;++col){
+        const int ix=bar*16+col;
+        if(p.steps[static_cast<std::size_t>(ix)].on&&!p.steps[static_cast<std::size_t>(ix)].locked)
+            active[count++]=ix;
+    }
+    if(!count)return VariationEdit::None;
+    const int candidate=active[((turn-1)%count+count)%count];
+    const auto tryEdit=[&](int op) noexcept -> VariationEdit {
+        const auto& original=p.steps[static_cast<std::size_t>(candidate)];
+        if(op==1){ // accent or de-accent: always an audible MIDI velocity change
+            const int delta=std::max(1,(intensity*24+50)/100);
+            const int before=original.velocity;
+            int after=before+delta<=127?before+delta:before-delta;
+            after=std::clamp(after,1,127);
+            if(after==before)after=before==127?126:before+1;
+            p.steps[static_cast<std::size_t>(candidate)].velocity=static_cast<std::uint8_t>(after);
+            return VariationEdit::Accent;
+        }
+        if(op==2){
+            for(int distance=1;distance<=12;++distance){
+                for(int sign:{+1,-1}){
+                    const int value=static_cast<int>(original.pitch)+sign*distance;
+                    if(value!=original.pitch && inScale(value,tonic,p.scale)){
+                        p.steps[static_cast<std::size_t>(candidate)].pitch=static_cast<std::uint8_t>(value);
+                        return VariationEdit::Pitch;
+                    }
+                }
+            }
+        }
+        if(op==3){
+            int limit=p.bars*16-candidate;
+            for(int next=candidate+1;next<p.bars*16;++next){
+                if(p.steps[static_cast<std::size_t>(next)].on){limit=next-candidate;break;}
+            }
+            const int before=std::min<int>(original.length,limit);
+            if(before<limit){p.steps[static_cast<std::size_t>(candidate)].length=static_cast<std::uint8_t>(before+1);return VariationEdit::Gate;}
+            if(before>1){p.steps[static_cast<std::size_t>(candidate)].length=static_cast<std::uint8_t>(before-1);return VariationEdit::Gate;}
+        }
+        if(op==4){
+            for(int offset:{1,-1}){
+                const int next=candidate+offset;
+                if(next/16==bar && next>=0 && next<p.bars*16){
+                    const auto& target=p.steps[static_cast<std::size_t>(next)];
+                    if(!target.on&&!target.locked){
+                        p.steps[static_cast<std::size_t>(next)]=original;
+                        p.steps[static_cast<std::size_t>(candidate)].on=false;
+                        return VariationEdit::Timing;
+                    }
+                }
+            }
+        }
+        return VariationEdit::None;
+    };
+    const int chosen=(turn-1)%4+1;
+    if(const auto result=tryEdit(chosen);result!=VariationEdit::None)return result;
+    return tryEdit(1);
 }
 inline bool toggle(Pattern& p,int step) noexcept {
     if(!valid(p)||step<0||step>=p.bars*16||p.steps[static_cast<std::size_t>(step)].locked)return false;

@@ -21,7 +21,7 @@ constexpr Hit hit(int x,int y) noexcept {
  if(inside(x,y,924,102,152,65))return {Target::Trigger};
  if(inside(x,y,27,207,44,37))return {Target::PrevBar};
  if(inside(x,y,160,207,44,37))return {Target::NextBar};
- for(int b=0;b<8;++b)if(inside(x,y,550+b*62,209,58,32))return {Target::Bar,b};
+ for(int b=0;b<8;++b)if(inside(x,y,550+b*62,190,58,24))return {Target::Bar,b};
  if(inside(x,y,gridX,gridY,16*cellW,4*rowH)){
   const int col=(x-gridX)/cellW,row=(y-gridY)/rowH;
   return {row==0?Target::NoteOn:row==1?Target::Pitch:row==2?Target::Velocity:Target::Length,col,row};
@@ -33,6 +33,15 @@ constexpr Hit hit(int x,int y) noexcept {
  if(inside(x,y,563,492,110,53))return {Target::Paste};
  if(inside(x,y,679,492,397,53))return {Target::Export};
  return {};
+}
+constexpr bool isCommand(Target t) noexcept {
+ return t==Target::Generate||t==Target::Variate||t==Target::Clear||
+        t==Target::Copy||t==Target::Paste||t==Target::Export;
+}
+constexpr int dragValue(Target target,int base,int upwardPixels,int maxLength=128) noexcept {
+ if(target==Target::Velocity)return std::clamp(base+upwardPixels/2,1,127);
+ if(target==Target::Length)return std::clamp(base+upwardPixels/4,1,maxLength);
+ return base;
 }
 constexpr int variationValue(int x) noexcept {return ((std::clamp(x,628,769)-628)*100+70)/141;}
 constexpr int defaultValue(Target t) noexcept {

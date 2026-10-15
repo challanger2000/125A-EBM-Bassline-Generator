@@ -201,7 +201,7 @@ tresult PLUGIN_API Controller::setComponentState(IBStream* stream){
   v2::Session next;next.restore(doc.session);
   auto pat=doc.editable.enabled?doc.editable:
             edit::fromPhrase(next.hasCurrent()?v2::render(next.current()):Phrase{next.options().bars,{}},
-                             next.options().bars,edit::Scale::Chromatic,1);
+                             next.options().bars,edit::Scale::Chromatic,2);
   if(!edit::valid(pat))return kResultFalse;
   session_=std::move(next);editable_=pat;mode_=doc.mode;
   bar_=std::clamp(bar_,0,editable_.bars-1);
@@ -284,15 +284,32 @@ void Controller::setVariationFromPixel(int x){
   auto next=session_;
   if(next.hasCurrent())(void)next.variate(value);
   else {auto st=next.snapshot();st.options.variation=value;next.restore(st);}
-  auto updated=editable_;
-  if(next.hasCurrent()){
-   auto fresh=edit::fromPhrase(v2::render(next.current()),updated.bars,updated.scale,updated.songStartBar);
-   for(int i=0;i<edit::kMaxSteps;++i)if(updated.steps[static_cast<std::size_t>(i)].locked)
-       fresh.steps[static_cast<std::size_t>(i)]=updated.steps[static_cast<std::size_t>(i)];
-   updated=std::move(fresh);
+  // VARIATION sets the intensity for future VARIATE clicks. Changing the slider
+  // must never silently replace user-entered notes or delete an unlocked edit.
+  if(transact(std::move(next),mode_,editable_)){
+   status_="VARIATION INTENSITY SET";redraw();
   }
-  (void)transact(std::move(next),mode_,std::move(updated));
  }catch(...){status_="INVALID VARIATION";redraw();}
+}
+void Controller::dragNumeric(int index,int row,int base,int upwardPixels){
+ if(index<0||index>=editable_.bars*16||(row!=2&&row!=3))return;
+ const auto& source=editable_.steps[static_cast<std::size_t>(index)];
+ if(!source.on||source.locked)return;
+ const ui::Target target=row==2?ui::Target::Velocity:ui::Target::Length;
+ int maxValue=128;
+ if(row==3){
+  maxValue=editable_.bars*16-index;
+  for(int next=index+1;next<editable_.bars*16;++next)
+   if(editable_.steps[static_cast<std::size_t>(next)].on){maxValue=next-index;break;}
+ }
+ const int value=ui::dragValue(target,base,upwardPixels,maxValue);
+ if(value==(row==2?source.velocity:source.length))return;
+ auto p=editable_;
+ const bool ok=edit::modify(p,index,source.pitch,row==2?value:source.velocity,
+                                row==3?value:source.length);
+ if(ok&&commitEdit(std::move(p))){
+  status_=row==2?"VELOCITY DRAGGED":"LENGTH DRAGGED";redraw();
+ }
 }
 void Controller::choice(int x,int y,int kind){
  if(!editor_||!editor_->getFrame()||!panel_)return;
@@ -308,11 +325,12 @@ void Controller::choice(int x,int y,int kind){
  }else if(kind==1){
   for(int b:{1,2,4,8})add(std::to_string(b)+" BARS",b,editable_.bars==b);
  }else if(kind==2){
-  for(int midi=24;midi<=60;++midi)add(std::string(notes[midi%12])+std::to_string(midi/12-1),midi,midi==session_.options().rootMidi);
+  for(int midi=24;midi<=60;++midi)add(std::string(notes[midi%12])+std::to_string(edit::studioOneOctave(midi)),midi,midi==session_.options().rootMidi);
  }else if(kind==3){
-  add("CHROMATIC",0,editable_.scale==edit::Scale::Chromatic);
-  add("MAJOR",1,editable_.scale==edit::Scale::Major);
-  add("NATURAL MINOR",2,editable_.scale==edit::Scale::NaturalMinor);
+  for(int v=0;v<edit::kScaleCount;++v){
+   const auto scale=static_cast<edit::Scale>(v);
+   add(edit::scaleName(scale),v,editable_.scale==scale);
+  }
  }else if(kind==4){
   for(int b=1;b<=16;++b)add("DAW BAR "+std::to_string(b),b,b==editable_.songStartBar);
  }else if(kind==5){
@@ -320,7 +338,7 @@ void Controller::choice(int x,int y,int kind){
   const auto root=session_.options().rootMidi;
   for(int midi=24;midi<=84;++midi){
    if(!edit::inScale(midi,root,editable_.scale))continue;
-   add(std::string(notes[midi%12])+std::to_string(midi/12-1),midi,
+   add(std::string(notes[midi%12])+std::to_string(edit::studioOneOctave(midi)),midi,
        editable_.steps[static_cast<std::size_t>(index)].pitch==midi);
   }
  }
@@ -338,6 +356,7 @@ void Controller::choice(int x,int y,int kind){
       auto fresh=edit::fromPhrase(v2::render(next.current()),pat.bars,pat.scale,pat.songStartBar);
       for(int i=0;i<edit::kMaxSteps;++i)if(pat.steps[static_cast<std::size_t>(i)].locked)
           fresh.steps[static_cast<std::size_t>(i)]=pat.steps[static_cast<std::size_t>(i)];
+      edit::conformToScale(fresh,next.options().rootMidi);
       pat=std::move(fresh);
      }else if(kind==1){
       const int engineBars=value<=4?4:8;
@@ -351,8 +370,7 @@ void Controller::choice(int x,int y,int kind){
         st.pitch=static_cast<std::uint8_t>(std::clamp(static_cast<int>(st.pitch)+transpose,0,127));
      }else if(kind==3){
       pat.scale=static_cast<edit::Scale>(value);
-      for(auto& st:pat.steps)if(st.on&&!st.locked)
-       st.pitch=static_cast<std::uint8_t>(edit::nearestPitch(st.pitch,next.options().rootMidi,pat.scale));
+      edit::conformToScale(pat,next.options().rootMidi);
      }else if(kind==4)pat.songStartBar=value;
      else if(kind==5){
       const int ix=bar_*16+editIndex_;
@@ -406,12 +424,16 @@ void Controller::hover(int x,int y){
  switch(ui::hit(x,y).target){
  case Target::NoteOn:next="NOTE ON: click toggle | SHIFT+click LOCK | CTRL+click reset";break;
  case Target::Pitch:next="PITCH: double-click choose scale note | CTRL+click root";break;
- case Target::Velocity:next="VELOCITY: double-click enter 1-127 | CTRL+click 100";break;
- case Target::Length:next="LENGTH: double-click enter 1-128 sixteenths | CTRL+click 1";break;
+ case Target::Velocity:next="VELOCITY: drag up/down or double-click 1-127 | CTRL+click 100";break;
+ case Target::Length:next="LENGTH: drag up/down or double-click steps | CTRL+click 1";break;
  case Target::Bars:next="BARS: choose 1 / 2 / 4 / 8";break;
+ case Target::Root:next="ROOT: note names follow Studio One (MIDI 60 = C3)";break;
+ case Target::Scale:next="SCALE: generated unlocked notes follow the selected scale";break;
+ case Target::Variation:next="VARIATION: intensity for next VARIATE; slider leaves notes unchanged";break;
  case Target::SongStart:next="SONG START: DAW bar at which pattern bar 1 starts";break;
  case Target::Copy:next="COPY BAR: store selected 16 steps";break;
  case Target::Paste:next="PASTE BAR: paste into current bar (LOCKED steps protected)";break;
+ case Target::Variate:next="VARIATE: edits visible notes in this bar; intensity set above";break;
  case Target::Export:next="EXPORT MIDI: exports exactly the selected bar count";break;
  default:break;
  }
@@ -445,6 +467,7 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
  switch(target.target){
  case Target::Style:if(ctrl){auto next=session_;next.setStyle(Style::ClassicEBM);
    (void)next.generate();auto pat=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
+   edit::conformToScale(pat,next.options().rootMidi);
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,0);break;
  case Target::Bars:if(ctrl){auto next=editable_;next.bars=8;(void)commitEdit(next);}else choice(x,y,1);break;
  case Target::Root:if(ctrl){auto next=session_;const int offset=36-next.options().rootMidi;next.setRootMidi(36);
@@ -473,14 +496,29 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
   auto p=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
   for(int i=0;i<edit::kMaxSteps;++i)if(editable_.steps[static_cast<std::size_t>(i)].locked)
    p.steps[static_cast<std::size_t>(i)]=editable_.steps[static_cast<std::size_t>(i)];
+  edit::conformToScale(p,next.options().rootMidi);
+  variationTurn_=0;
   (void)transact(std::move(next),mode_,std::move(p));break;
  }
  case Target::Variate:{
-  auto next=session_;if(!next.nextVariant()){status_="NO NEW VARIATION";redraw();break;}
-  auto p=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
-  for(int i=0;i<edit::kMaxSteps;++i)if(editable_.steps[static_cast<std::size_t>(i)].locked)
-   p.steps[static_cast<std::size_t>(i)]=editable_.steps[static_cast<std::size_t>(i)];
-  (void)transact(std::move(next),mode_,std::move(p));break;
+  if(session_.options().variation==0){status_="VARIATE: 0% IS NEUTRAL";redraw();break;}
+  auto p=editable_;
+  const int nextTurn=variationTurn_+1;
+  const auto result=edit::variateVisible(p,session_.options().variation,nextTurn,
+                                        session_.options().rootMidi,bar_);
+  if(result==edit::VariationEdit::None){status_="VARIATE: NO UNLOCKED NOTES";redraw();break;}
+  if(commitEdit(std::move(p))){
+   variationTurn_=nextTurn;
+   switch(result){
+    case edit::VariationEdit::Accent:status_="VARIATE: ACCENT CHANGED";break;
+    case edit::VariationEdit::Pitch:status_="VARIATE: PITCH CHANGED";break;
+    case edit::VariationEdit::Gate:status_="VARIATE: LENGTH CHANGED";break;
+    case edit::VariationEdit::Timing:status_="VARIATE: TIMING CHANGED";break;
+    default:break;
+   }
+   redraw();
+  }
+  break;
  }
  case Target::Clear:{auto p=editable_;(void)edit::clear(p);(void)commitEdit(std::move(p));break;}
  case Target::Copy:{for(int j=0;j<16;++j)clipboard_[static_cast<std::size_t>(j)]=editable_.steps[static_cast<std::size_t>(bar_*16+j)];

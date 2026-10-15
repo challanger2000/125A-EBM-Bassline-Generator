@@ -21,6 +21,58 @@ int main(){
   CHECK(rt.cells[0].onPitch==36);
   CHECK(rt.cells[8].offPitch==36);
  }
+ // All ten scales have distinct, accepted interval tables; the first
+ // three stable IDs are unchanged for existing EBM2 project states.
+ CHECK(static_cast<int>(e::Scale::Chromatic)==0);
+ CHECK(static_cast<int>(e::Scale::Major)==1);
+ CHECK(static_cast<int>(e::Scale::NaturalMinor)==2);
+ CHECK(e::kScaleCount==10);
+ CHECK(e::studioOneOctave(60)==3);
+ CHECK(e::studioOneOctave(48)==2);
+ CHECK(e::studioOneOctave(36)==1);
+ CHECK(e::inScale(47,36,e::Scale::HarmonicMinor)); // B is minor leading tone
+ CHECK(!e::inScale(46,36,e::Scale::HarmonicMinor));
+ CHECK(e::inScale(45,36,e::Scale::MelodicMinor));
+ CHECK(e::inScale(46,36,e::Scale::Dorian));
+ CHECK(e::inScale(37,36,e::Scale::Phrygian));
+ CHECK(e::inScale(46,36,e::Scale::Mixolydian));
+ CHECK(e::inScale(42,36,e::Scale::Lydian));
+ CHECK(!e::inScale(38,36,e::Scale::MinorPentatonic));
+ CHECK(e::inScale(39,36,e::Scale::MinorPentatonic));
+ for(int bars:{1,2,4,8}){
+  e::Pattern original{};original.enabled=true;original.bars=bars;
+  original.scale=e::Scale::NaturalMinor;
+  original.songStartBar=2;
+  CHECK(e::modify(original,0,36,88,1));
+  CHECK(e::modify(original,4,39,110,2));
+  original.steps[4].locked=true;
+  const auto before=e::toPhrase(original).notes;
+  CHECK(e::variateVisible(original,35,1,36,0)==e::VariationEdit::Accent);
+  CHECK(original.steps[4].velocity==110 && original.steps[4].pitch==39);
+  CHECK(e::toPhrase(original).notes!=before);
+  CHECK(e::variateVisible(original,35,2,36,0)==e::VariationEdit::Pitch);
+  CHECK(e::inScale(original.steps[0].pitch,36,e::Scale::NaturalMinor));
+  CHECK(e::variateVisible(original,35,3,36,0)==e::VariationEdit::Gate);
+  CHECK(e::variateVisible(original,35,4,36,0)==e::VariationEdit::Timing);
+  CHECK(e::toPhrase(original).bars==bars);
+  ebm::live::Pattern live{};
+  CHECK(ebm::live::prepare(e::toPhrase(original),live));
+  auto held=original;
+  CHECK(e::variateVisible(held,0,1,36,0)==e::VariationEdit::None);
+  CHECK(held.steps[4].locked);
+ }
+ {
+  e::Pattern onlyLocked{};onlyLocked.enabled=true;onlyLocked.bars=1;
+  CHECK(e::modify(onlyLocked,0,36,90,1));onlyLocked.steps[0].locked=true;
+  CHECK(e::variateVisible(onlyLocked,75,1,36,0)==e::VariationEdit::None);
+  e::Pattern scalePat{};scalePat.enabled=true;scalePat.bars=1;
+  scalePat.scale=e::Scale::NaturalMinor;
+  CHECK(e::modify(scalePat,0,42,110,1)); // F# not in C natural minor
+  CHECK(e::modify(scalePat,1,42,90,1));scalePat.steps[1].locked=true;
+  e::conformToScale(scalePat,36);
+  CHECK(e::inScale(scalePat.steps[0].pitch,36,scalePat.scale));
+  CHECK(scalePat.steps[1].pitch==42); // locked notes preserve user intent
+ }
  CHECK(e::inScale(39,36,e::Scale::NaturalMinor));
  CHECK(!e::inScale(40,36,e::Scale::NaturalMinor));
  CHECK(e::nearestPitch(40,36,e::Scale::NaturalMinor)==41);
@@ -42,6 +94,13 @@ int main(){
  CHECK(model.restore(recovered));
  CHECK(model.songStartBar()==2);
  CHECK(model.snapshot().editable.steps[16].locked);
+ // Extended scale values use the same EBM2 1-byte field and round-trip.
+ state.editable.scale=e::Scale::Phrygian;
+ CHECK(ebm::host::encode(state,bytes));
+ CHECK(ebm::host::decode(bytes.data(),bytes.size(),recovered));
+ CHECK(recovered.editable.scale==e::Scale::Phrygian);
+ CHECK(model.restore(recovered));
+ CHECK(model.snapshot().editable.scale==e::Scale::Phrygian);
  auto corrupt=bytes;corrupt[corrupt.size()-20]^=0x1;
  CHECK(!ebm::host::decode(corrupt.data(),corrupt.size(),recovered));
  CHECK(recovered.editable.bars==1);
