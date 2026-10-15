@@ -23,13 +23,13 @@ int main(){
  }
  // All ten scales have distinct, accepted interval tables; the first
  // three stable IDs are unchanged for existing EBM2 project states.
- CHECK(static_cast<int>(e::Scale::Chromatic)==0);
- CHECK(static_cast<int>(e::Scale::Major)==1);
- CHECK(static_cast<int>(e::Scale::NaturalMinor)==2);
- CHECK(e::kScaleCount==10);
- CHECK(e::studioOneOctave(60)==3);
- CHECK(e::studioOneOctave(48)==2);
- CHECK(e::studioOneOctave(36)==1);
+ static_assert(static_cast<int>(e::Scale::Chromatic)==0);
+ static_assert(static_cast<int>(e::Scale::Major)==1);
+ static_assert(static_cast<int>(e::Scale::NaturalMinor)==2);
+ static_assert(e::kScaleCount==10);
+ static_assert(e::studioOneOctave(60)==3);
+ static_assert(e::studioOneOctave(48)==2);
+ static_assert(e::studioOneOctave(36)==1);
  CHECK(e::inScale(47,36,e::Scale::HarmonicMinor)); // B is minor leading tone
  CHECK(!e::inScale(46,36,e::Scale::HarmonicMinor));
  CHECK(e::inScale(45,36,e::Scale::MelodicMinor));
