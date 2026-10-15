@@ -388,16 +388,7 @@ void Controller::dragNumeric(int index,int row,int base,int upwardPixels){
   // Move through SCALE degrees, not chromatic semitones. The drag origin
   // remains fixed so upward/downward movement is reversible.
   const int root=session_.options().rootMidi;
-  const int low=std::max(0,root-12),high=std::min(127,root+12);
-  const int targetDegree=upwardPixels/8;
-  int targetPitch=startingValue;
-  for(int i=0;i<std::abs(targetDegree);++i){
-   const int direction=targetDegree>0?1:-1;
-   int next=targetPitch+direction;
-   while(next>=low&&next<=high&&!edit::inScale(next,root,editable_.scale))next+=direction;
-   if(next<low||next>high)break;
-   targetPitch=next;
-  }
+  const int targetPitch=ui::pitchDrag(startingValue,root,editable_.scale,upwardPixels);
   if(targetPitch==source.pitch)return;
   auto p=editable_;
   if(edit::modify(p,index,targetPitch,source.velocity,source.length)&&commitEdit(std::move(p))){
@@ -442,7 +433,7 @@ void Controller::choice(int x,int y,int kind){
   const int index=bar_*16+editIndex_;
   const auto root=session_.options().rootMidi;
   const int selected=editable_.steps[static_cast<std::size_t>(index)].pitch;
-  const int low=std::max(0,root-12),high=std::min(127,root+12);
+  const int low=ui::pitchMin(root),high=ui::pitchMax(root);
   for(int midi=low;midi<=high;++midi){
    if(!edit::inScale(midi,root,editable_.scale))continue;
    add(std::string(notes[midi%12])+std::to_string(edit::studioOneOctave(midi)),midi,
