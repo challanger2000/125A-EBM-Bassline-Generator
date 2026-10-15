@@ -144,5 +144,23 @@ int main(){
     CHECK(!backpressure.process(p,f,nullptr,0,reject));CHECK(backpressure.activePitch()==36);
     CHECK(backpressure.process(p,f,nullptr,0,reject));CHECK(backpressure.activePitch()==-1);
     CHECK(reject.count==2 && !reject.data[1].on);
+    // QA-01: over-limit input must release an active note, with NoteOff
+    // backpressure retried on the following callback; no duplicate release.
+    Runtime overflow;
+    Sink overflowSink;
+    Block ob;ob.samples=20;ob.sampleRate=1000.;ob.tempo=120.;
+    ob.projectPpq=0.;ob.playing=true;ob.ppqValid=true;ob.tempoValid=true;ob.revision=1;
+    CHECK(overflow.process(p,ob,nullptr,0,overflowSink));
+    CHECK(overflow.activePitch()==36);
+    overflowSink.failNextOff=true;
+    ob.playing=false;ob.ppqValid=false;ob.tempoValid=false;
+    CHECK(!overflow.process(p,ob,nullptr,Runtime::maxTriggers+1,overflowSink));
+    CHECK(overflow.activePitch()==36);
+    CHECK(!overflow.process(p,ob,nullptr,Runtime::maxTriggers+1,overflowSink));
+    CHECK(overflow.activePitch()==-1);
+    const int releasedCount=overflowSink.count;
+    CHECK(releasedCount==2 && !overflowSink.data[1].on);
+    CHECK(!overflow.process(p,ob,nullptr,Runtime::maxTriggers+1,overflowSink));
+    CHECK(overflowSink.count==releasedCount);
     std::printf("PASS: %d timing matrices + trigger matching, seek, live edit, NoteOff backpressure, invalid source\n",matrices);
 }
