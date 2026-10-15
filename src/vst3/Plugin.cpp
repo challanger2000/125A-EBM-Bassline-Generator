@@ -114,7 +114,10 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
                ev.type!=Steinberg::Vst::Event::kNoteOffEvent)continue;
             const bool on=ev.type==Steinberg::Vst::Event::kNoteOnEvent && ev.noteOn.velocity>0.f;
             const int pitch=ev.type==Steinberg::Vst::Event::kNoteOnEvent?ev.noteOn.pitch:ev.noteOff.pitch;
-            if(ev.sampleOffset<0||ev.sampleOffset>=data.numSamples||pitch<0||pitch>127)return kResultFalse;
+            if(ev.sampleOffset<0||ev.sampleOffset>=data.numSamples||pitch<0||pitch>127){
+                inputOverflow=true; // Malformed input also requires safe voice cleanup.
+                break;
+            }
             triggers[count++]={ev.sampleOffset,pitch,on};
         }
     }
