@@ -595,9 +595,17 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
   redraw();break;
  }
  case Target::Zoom:zoom_=zoom_>1.25?1.0:1.5;if(editor_)editor_->setZoomFactor(zoom_);redraw();break;
- case Target::PrevBar:bar_=std::max(0,bar_-1);redraw();break;
- case Target::NextBar:bar_=std::min(editable_.bars-1,bar_+1);redraw();break;
- case Target::Bar:if(target.column<editable_.bars){bar_=target.column;redraw();}break;
+ case Target::PrevBar:
+  if(textInput_){textInput_->setVisible(false);editIndex_=-1;editRow_=-1;}
+  bar_=std::max(0,bar_-1);redraw();break;
+ case Target::NextBar:
+  if(textInput_){textInput_->setVisible(false);editIndex_=-1;editRow_=-1;}
+  bar_=std::min(editable_.bars-1,bar_+1);redraw();break;
+ case Target::Bar:
+  if(target.column<editable_.bars){
+   if(textInput_){textInput_->setVisible(false);editIndex_=-1;editRow_=-1;}
+   bar_=target.column;redraw();
+  }break;
  case Target::Generate:{
   auto next=session_;(void)next.generate();
   auto p=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
