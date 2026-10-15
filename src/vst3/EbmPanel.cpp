@@ -39,7 +39,7 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseDown(VSTGUI::CPoint& p,const VSTGUI::
  if(ui::isCommand(hit.target))lastAction_=hit.target;
  invalid();
  if(hit.target==ui::Target::Gate&&!(buttons&VSTGUI::kControl)){
-  draggingGate_=true;owner_->setGateFromPixel(x);return VSTGUI::kMouseEventHandled;
+  draggingGate_=true;owner_->beginGateGesture();owner_->setGateFromPixel(x);return VSTGUI::kMouseEventHandled;
  }
  if(hit.target==ui::Target::Variation&&!(buttons&VSTGUI::kControl)){
   dragging_=true;owner_->setVariationFromPixel(x);return VSTGUI::kMouseEventHandled;
@@ -76,10 +76,12 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseMoved(VSTGUI::CPoint& p,const VSTGUI:
 }
 VSTGUI::CMouseEventResult EbmPanel::onMouseUp(VSTGUI::CPoint&,const VSTGUI::CButtonState&){
  const bool handled=pressed_!=ui::Target::None||dragging_||draggingNumeric_||draggingGate_;
+ if(draggingGate_&&owner_)owner_->endGateGesture();
  draggingGate_=false;dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
  return handled?VSTGUI::kMouseEventHandled:VSTGUI::kMouseEventNotHandled;
 }
 VSTGUI::CMouseEventResult EbmPanel::onMouseCancel(){
+ if(draggingGate_&&owner_)owner_->endGateGesture();
  draggingGate_=false;dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
  return VSTGUI::kMouseEventHandled;
 }
