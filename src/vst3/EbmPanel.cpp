@@ -44,13 +44,13 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseDown(VSTGUI::CPoint& p,const VSTGUI::
  if(hit.target==ui::Target::Variation&&!(buttons&(VSTGUI::kControl|VSTGUI::kDoubleClick))){
   dragging_=true;owner_->setVariationFromPixel(x);return VSTGUI::kMouseEventHandled;
  }
- if((hit.target==ui::Target::Velocity||hit.target==ui::Target::Length)&&
+ if((hit.target==ui::Target::Pitch||hit.target==ui::Target::Velocity||hit.target==ui::Target::Length)&&
     !(buttons&VSTGUI::kControl)&&!(buttons&VSTGUI::kDoubleClick)){
   const int ix=owner_->bar()*16+hit.column;
   const auto& note=owner_->pattern().steps[static_cast<std::size_t>(ix)];
   if(note.on&&!note.locked){
    draggingNumeric_=true;dragIndex_=ix;dragRow_=hit.row;dragY_=y;
-   dragBase_=hit.target==ui::Target::Velocity?note.velocity:edit::effectiveLength(owner_->pattern(),ix);
+   dragBase_=hit.target==ui::Target::Pitch?note.pitch:(hit.target==ui::Target::Velocity?note.velocity:edit::effectiveLength(owner_->pattern(),ix));
    return VSTGUI::kMouseEventHandled;
   }
  }
