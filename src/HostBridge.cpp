@@ -132,9 +132,12 @@ bool decode(const std::uint8_t* bytes,std::size_t count,Document& dest) noexcept
     }catch(...) {return false;}
 }
 
-bool PatternExchange::publish(const live::Pattern& source) noexcept {
-    if(!source.ready || (source.bars!=1&&source.bars!=2&&source.bars!=4&&source.bars!=8) ||
-       source.lengthSteps!=source.bars*16)return false;
+bool PatternExchange::publish(const PreparedState& source) noexcept {
+    const auto& pattern=source.pattern;
+    if(!pattern.ready || (pattern.bars!=1&&pattern.bars!=2&&pattern.bars!=4&&pattern.bars!=8) ||
+       pattern.lengthSteps!=pattern.bars*16 || source.root<0 || source.root>127 ||
+       source.songStart<1 || source.songStart>16 ||
+       static_cast<int>(source.scale)<0 || static_cast<int>(source.scale)>=edit::kScaleCount)return false;
     std::lock_guard<std::mutex> guard(writerMutex_);
     for(int i=0;i<3;++i){
         int expected=Free;
@@ -152,7 +155,7 @@ bool PatternExchange::publish(const live::Pattern& source) noexcept {
     }
     return false;
 }
-const live::Pattern* PatternExchange::acquire(std::uint64_t& revision) noexcept {
+const PreparedState* PatternExchange::acquire(std::uint64_t& revision) noexcept {
     const int candidate=pending_.exchange(-1,std::memory_order_acq_rel);
     if(candidate>=0){
         int expected=Ready;
@@ -179,8 +182,11 @@ bool Model::publishSession(const v2::Session& chosen) {
     const int bars=chosen.options().bars;
     Phrase phrase{bars,{}};
     if(chosen.hasCurrent())phrase=v2::render(chosen.current());
-    live::Pattern compiled;
-    return live::prepare(phrase,compiled) && patterns_.publish(compiled);
+    PreparedState compiled;
+    compiled.root=chosen.options().rootMidi;
+    compiled.scale=edit::Scale::Chromatic;
+    compiled.songStart=1;
+    return live::prepare(phrase,compiled.pattern) && patterns_.publish(compiled);
 }
 bool Model::restore(const Document& doc) {
     std::lock_guard<std::mutex> guard(documentMutex_);
@@ -190,13 +196,14 @@ bool Model::restore(const Document& doc) {
         next.restore(doc.session);
         Phrase phrase=doc.editable.enabled?edit::toPhrase(doc.editable):
             (next.hasCurrent()?v2::render(next.current()):Phrase{next.options().bars,{}});
-        live::Pattern compiled{};
-        if(!live::prepare(phrase,compiled) || !patterns_.publish(compiled))return false;
+        PreparedState compiled{};
+        compiled.root=doc.session.options.rootMidi;
+        compiled.scale=doc.editable.scale;
+        compiled.songStart=doc.editable.enabled?doc.editable.songStartBar:1;
+        if(!live::prepare(phrase,compiled.pattern) || !patterns_.publish(compiled))return false;
         session_=std::move(next);
         editable_=doc.editable;
         gate_.store(doc.gatePercent,std::memory_order_release);
-        root_.store(doc.session.options.rootMidi,std::memory_order_release);
-        scale_.store(static_cast<int>(doc.editable.scale),std::memory_order_release);
         songStart_.store(doc.editable.enabled?doc.editable.songStartBar:1,
                          std::memory_order_release);
         mode_.store(doc.mode,std::memory_order_release);
