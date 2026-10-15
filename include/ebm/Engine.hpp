@@ -6,13 +6,13 @@ enum class Style { MinimalBody, ClassicEBM, DarkElectro };
 struct Config {
     Style style=Style::ClassicEBM;
     int bars=8;
-    int rootMidi=36;
+    int rootMidi=48; // New patterns: Studio One C2 (MIDI note 48).
     std::uint64_t seed=1;
     int variation=30;
 };
 struct Note {
     int step=0;
-    int pitch=36;
+    int pitch=48;
     int velocity=100;
     int duration=1;
     bool operator==(const Note& o) const {

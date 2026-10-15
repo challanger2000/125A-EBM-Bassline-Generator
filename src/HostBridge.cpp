@@ -120,7 +120,7 @@ bool decode(const std::uint8_t* bytes,std::size_t count,Document& dest) noexcept
         if(!candidate.session.hasCurrent) {
             // Canonical no-current fields were all 0 except Config defaults.
             if(storedCurrent.style!=Style::ClassicEBM || storedCurrent.bars!=8 ||
-               storedCurrent.rootMidi!=36 || storedCurrent.seed!=1 ||
+               (storedCurrent.rootMidi!=36 && storedCurrent.rootMidi!=48) || storedCurrent.seed!=1 ||
                storedCurrent.variation!=30)return false;
         }
         if(!validModel(candidate))return false;

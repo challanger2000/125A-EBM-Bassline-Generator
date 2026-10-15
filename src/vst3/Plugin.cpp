@@ -354,6 +354,8 @@ void Controller::choice(int x,int y,int kind){
      if(kind==0){
       next.setStyle(static_cast<Style>(value));(void)next.generate();
       auto fresh=edit::fromPhrase(v2::render(next.current()),pat.bars,pat.scale,pat.songStartBar);
+      if(next.options().style==Style::ClassicEBM)
+       (void)edit::generateClassicDrive(fresh,next.options().rootMidi,next.current().settings.seed);
       for(int i=0;i<edit::kMaxSteps;++i)if(pat.steps[static_cast<std::size_t>(i)].locked)
           fresh.steps[static_cast<std::size_t>(i)]=pat.steps[static_cast<std::size_t>(i)];
       edit::conformToScale(fresh,next.options().rootMidi);
@@ -467,10 +469,11 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
  switch(target.target){
  case Target::Style:if(ctrl){auto next=session_;next.setStyle(Style::ClassicEBM);
    (void)next.generate();auto pat=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
+   (void)edit::generateClassicDrive(pat,next.options().rootMidi,next.current().settings.seed);
    edit::conformToScale(pat,next.options().rootMidi);
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,0);break;
  case Target::Bars:if(ctrl){auto next=editable_;next.bars=8;(void)commitEdit(next);}else choice(x,y,1);break;
- case Target::Root:if(ctrl){auto next=session_;const int offset=36-next.options().rootMidi;next.setRootMidi(36);
+ case Target::Root:if(ctrl){auto next=session_;const int offset=48-next.options().rootMidi;next.setRootMidi(48);
    auto pat=editable_;for(auto& s:pat.steps)if(s.on&&!s.locked)
      s.pitch=static_cast<std::uint8_t>(std::clamp(static_cast<int>(s.pitch)+offset,0,127));
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,2);break;
@@ -494,6 +497,8 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
  case Target::Generate:{
   auto next=session_;(void)next.generate();
   auto p=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
+  if(next.options().style==Style::ClassicEBM)
+   (void)edit::generateClassicDrive(p,next.options().rootMidi,next.current().settings.seed);
   for(int i=0;i<edit::kMaxSteps;++i)if(editable_.steps[static_cast<std::size_t>(i)].locked)
    p.steps[static_cast<std::size_t>(i)]=editable_.steps[static_cast<std::size_t>(i)];
   edit::conformToScale(p,next.options().rootMidi);

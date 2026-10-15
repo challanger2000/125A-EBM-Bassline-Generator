@@ -42,7 +42,7 @@ int main(){
  CHECK(defaultValue(Target::SongStart)==2);
  CHECK(defaultValue(Target::Variation)==30);
  CHECK(defaultValue(Target::Bars)==8);
- CHECK(defaultValue(Target::Root)==36);
+ CHECK(defaultValue(Target::Root)==48);
  for(int x:{-1,1100})CHECK(hit(x,200).target==Target::None);
  v2::Session s;(void)s.generate();const auto snap=s.snapshot();
  CHECK(snap.hasCurrent);

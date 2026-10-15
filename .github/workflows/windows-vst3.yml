@@ -37,7 +37,7 @@ jobs:
           ebm_groove_interlock_tests ebm_session_tests ebm_alternative_tests
           ebm_rhythmic_novelty_tests ebm_core_novelty_tests
           ebm_loop_boundary_tests ebm_live_midi_tests ebm_host_bridge_tests
-          ebm_gui_policy_tests ebm_edit_pattern_tests
+          ebm_gui_policy_tests ebm_edit_pattern_tests ebm_classic_drive_tests
       - name: Run all Windows core and GUI regressions
         shell: pwsh
         run: ctest --test-dir build-vst3 -C Release --output-on-failure -j 4

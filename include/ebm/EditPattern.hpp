@@ -32,7 +32,7 @@ inline const char* scaleName(Scale scale) noexcept {
 }
 struct Step {
     bool on=false;
-    std::uint8_t pitch=36,velocity=100,length=1;
+    std::uint8_t pitch=48,velocity=100,length=1;
     bool locked=false;
 };
 struct Pattern {
@@ -101,6 +101,76 @@ inline Pattern fromPhrase(const Phrase& phrase,int bars,Scale scale=Scale::Chrom
     }
     return result;
 }
+// Seed-indexed, curated motoric EBM rhythms. The original v2 composer is
+// intentionally untouched: existing EBM1/EBM2 projects and their saved seeds
+// must never silently change sound on project recall. This new phrase treatment
+// is applied only when a user presses GENERATE for CLASSIC EBM, before the
+// existing per-step LOCK overlay and scale conformance. Control thread only.
+// The eight motifs emphasize continuous eighth-note motion, selective 16th
+// doubles and syncopated responses, while keeping the tonic dominant.
+inline bool generateClassicDrive(Pattern& p,int root,std::uint64_t seed) noexcept {
+    if(!valid(p)||root<24||root>60)return false;
+    // Each 16-bit mask describes one bar at 16 steps/4 beats. Bit n is a NoteOn
+    // at sixteenth n. A and B are related, but not carbon copies.
+    static constexpr std::array<std::uint16_t,8> motifA{{
+        0xD5D5u, // 0,2,4,6,7,8,10,12,14,15  (motor + turnaround)
+        0xD55Du, // 0,2,3,4,6,8,10,12,14,15  (early push)
+        0xD775u, // 0,2,4,5,6,8,9,10,12,14,15 (offbeat tension)
+        0xD5D7u, // 0,1,2,4,6,7,8,10,12,14,15 (attack double)
+        0x75D5u, // 0,2,4,6,7,8,10,12,13,14  (late double)
+        0xD555u, // 0,2,4,6,8,10,12,14,15    (relentless eighths)
+        0xD5DDu, // 0,2,3,4,6,7,8,10,12,14,15 (gallop response)
+        0xD755u  // 0,2,4,6,8,9,10,12,14,15  (weak-beat drive)
+    }};
+    static constexpr std::array<std::uint16_t,8> motifB{{
+        0x55D5u, // answer ends open for next downbeat
+        0xD5B5u, // extra push on the second beat
+        0xD5D5u, // straight motor answer
+        0x55DDu, // clipped final sixteenth
+        0xD755u, // repeated syncopated response
+        0xD775u, // stronger two-beat push
+        0xD555u, // stripped motor answer
+        0xD5D7u  // machine double
+    }};
+    const int grammar=static_cast<int>(seed%motifA.size());
+    const int answerVariant=static_cast<int>((seed/8)%motifB.size());
+    const int rhythmicAccent=static_cast<int>((seed/8)%4);
+    for(int bar=0;bar<p.bars;++bar){
+        std::uint16_t mask=bar%2==0?motifA[static_cast<std::size_t>(grammar)]
+                                     :motifB[static_cast<std::size_t>((grammar+answerVariant)%8)];
+        // Four distinct seed-controlled weak-step treatments *per* grammar.
+        // No RNG on the audio thread and no drift when a project is reloaded.
+        if(rhythmicAccent>0){
+            constexpr std::array<int,4> turnaround{{0,5,11,13}};
+            mask=static_cast<std::uint16_t>(mask ^ (1u<<turnaround[static_cast<std::size_t>(rhythmicAccent)]));
+        }
+        // Build complete A/B phrases first. Four-/eight-bar arrangements keep
+        // their pulse and add a single, deliberate turnaround in later bars.
+        if(bar>1 && (bar%4)==3) mask=static_cast<std::uint16_t>(mask ^ 0x4000u);
+        for(int step=0;step<16;++step){
+            auto& s=p.steps[static_cast<std::size_t>(bar*16+step)];
+            if(s.locked)continue;
+            const bool active=(mask&(static_cast<std::uint16_t>(1u)<<step))!=0;
+            s.on=active;
+            if(!active)continue;
+            const bool downbeat=(step%4)==0;
+            const bool offbeat=(step%2)==1;
+            int note=root;
+            // One accent/answer tone at most per bar. Root remains >= 80%.
+            if(step==10 && (bar+grammar)%3==0)note=root+7;
+            if(step==14 && (bar+grammar)%4==2)note=root+12;
+            s.pitch=static_cast<std::uint8_t>(std::clamp(note,0,127));
+            const int shape=((grammar+bar+step)%3)*3;
+            s.velocity=static_cast<std::uint8_t>(downbeat?115+shape:
+                                                 offbeat?92+shape:104+shape);
+            // Note-off occurs at/before next NoteOn. No overlapping MIDI bass notes.
+            s.length=static_cast<std::uint8_t>(offbeat?1:2);
+        }
+    }
+    p.enabled=true;
+    return true;
+}
+
 // Generator phrases are composed chromatically by the original grammar.
 // Quantize only unlocked, active notes on the control thread, never in process().
 inline void conformToScale(Pattern& p,int tonic) noexcept {

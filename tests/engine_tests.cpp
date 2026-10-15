@@ -48,18 +48,19 @@ int main() {
                     REQUIRE(std::string(midi.begin()+14,midi.begin()+18)=="MTrk");
                     if(n<30 && bars==8 && intensity==85)
                         (void)sampleHashes.insert(midi);
+                    const int originalRoot=cfg.rootMidi;
                     cfg.rootMidi=43;
                     const auto transposed=compose(cfg);
                     const auto shifted=render(transposed);
                     REQUIRE(phrase.notes.size()==shifted.notes.size());
                     for(std::size_t j=0;j<phrase.notes.size();++j) {
-                        REQUIRE(shifted.notes[j].pitch-phrase.notes[j].pitch==7);
+                        REQUIRE(shifted.notes[j].pitch-phrase.notes[j].pitch==43-originalRoot);
                         REQUIRE(shifted.notes[j].step==phrase.notes[j].step);
                         REQUIRE(shifted.notes[j].duration==phrase.notes[j].duration);
                         REQUIRE(shifted.notes[j].velocity==phrase.notes[j].velocity);
                     }
-                    cfg.rootMidi=36;
-                    REQUIRE(render(compose(cfg)).notes==phrase.notes); // C -> G -> C restore
+                    cfg.rootMidi=originalRoot;
+                    REQUIRE(render(compose(cfg)).notes==phrase.notes); // Restore original root
                     if(intensity>0) {
                         const int expectedEdits=(intensity<25?1:(intensity<50?2:(intensity<75?3:4)))+((intensity>=75&&s!=0)?1:0);
                         REQUIRE(static_cast<int>(composed.edits.size())==expectedEdits);

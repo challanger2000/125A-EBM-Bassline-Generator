@@ -50,7 +50,7 @@ constexpr int defaultValue(Target t) noexcept {
  if(t==Target::Variation)return 30;
  if(t==Target::Velocity)return 100;
  if(t==Target::Length)return 1;
- if(t==Target::Root)return 36;
+ if(t==Target::Root)return 48;
  return 0;
 }
 }
