@@ -1,3 +1,5 @@
+> **Historical initial GUI baseline.** See `EDITABLE-PATTERN-AUDIT-2026-10-15.md` for current editable UI contract and explicit open QA gates.
+
 # EBM Bassline Generator — static-first VSTGUI v0.2 prototype
 
 **STATUS:** Initial native editor wiring, NOT release-ready. No visual/Studio One confirmation, no full 125A Plugin Tester. The source is developed on `research/v0.2.0-musical-foundation`, never `main`.
@@ -37,7 +39,3 @@
 - Most musical parameters intentionally **not host automatable yet**; the UI sends checked state snapshots instead. Do not mark general VST3 automation PASS.
 - No callback against main thread IConnectionPoint guaranteed without running native host probe.
 - Not FINAL and no sonic suitability assertion.
-
-## Native host proof (next Windows job)
-
-`tests/vst3_host_probe.cpp` dynamically loads the actual staged VST3 using Steinberg hosting utilities, validates one input and one output MIDI bus, sends the exact full-document `IMessage` format to the **actual Processor IConnectionPoint**, verifies processor state changes and rejects a corrupted state without mutation. It also checks saved/restored UI-only 150% zoom and runs five HWND editor attach/detach cycles. This verifies the message **receiver** and editor lifecycle, not the physical pointer click/drag inside Studio One. It is pending Windows CI until executed; no claim of host PASS before the result.

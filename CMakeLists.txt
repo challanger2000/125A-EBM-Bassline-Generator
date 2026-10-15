@@ -204,7 +204,7 @@ if(EBM_ENABLE_VST3)
         target_sources(EBMBasslineGenerator PRIVATE
             "${vst3sdk_SOURCE_DIR}/public.sdk/source/main/dllmain.cpp")
     endif()
-    # Independent SDK-hosted probe of the real Windows .vst3 (not just source-level tests).
+    # Independent SDK-hosted real Windows .vst3 lifecycle/state probe.
     if(WIN32)
         add_executable(EBMHostProbe
             tests/vst3_host_probe.cpp
@@ -217,4 +217,16 @@ if(EBM_ENABLE_VST3)
         target_compile_definitions(EBMHostProbe PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
     endif()
     smtg_target_configure_version_file(EBMBasslineGenerator)
+endif()
+
+# Editable MIDI pattern, 1/2/4/8 bars, legacy VST3 state migration.
+if(BUILD_TESTING)
+    add_executable(ebm_edit_pattern_tests tests/edit_pattern_tests.cpp)
+    target_link_libraries(ebm_edit_pattern_tests PRIVATE ebm_core)
+    if(MSVC)
+        target_compile_options(ebm_edit_pattern_tests PRIVATE /W4 /WX)
+    else()
+        target_compile_options(ebm_edit_pattern_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME EBM_Editable_MIDI_Pattern COMMAND ebm_edit_pattern_tests)
 endif()

@@ -6,8 +6,10 @@
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "vstgui/plugin-bindings/vst3editor.h"
 #include "vstgui/uidescription/uiattributes.h"
+#include "vstgui/lib/controls/icontrollistener.h"
 #include <atomic>
-namespace VSTGUI {class CView;class VST3Editor;class IUIDescription;}
+#include <array>
+namespace VSTGUI {class CView;class VST3Editor;class IUIDescription;class CControl;class CTextEdit;}
 namespace ebm::vst3 {
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -34,7 +36,7 @@ private:
  double sampleRate_=44100.;
 };
 class EbmPanel;
-class Controller final:public EditController,public VSTGUI::VST3EditorDelegate {
+class Controller final:public EditController,public VSTGUI::VST3EditorDelegate,public VSTGUI::IControlListener {
 public:
  static FUnknown* createInstance(void*) {return static_cast<IEditController*>(new Controller);}
  tresult PLUGIN_API initialize(FUnknown*) override;
@@ -51,15 +53,27 @@ public:
  double zoom() const noexcept {return zoom_;}
  const char* status() const noexcept {return status_;}
  live::Mode mode() const noexcept {return mode_;}
- void click(int x,int y,bool control);
+ void click(int x,int y,bool control,bool shift=false,bool doubleClick=false);
+ void hover(int x,int y);
+ void valueChanged(VSTGUI::CControl*) override;
+ const edit::Pattern& pattern() const noexcept {return editable_;}
+ const char* help() const noexcept {return help_;}
  void setVariationFromPixel(int x);
 private:
- bool transact(v2::Session next,live::Mode mode);
- bool deliver(const v2::Session& next,live::Mode mode);
+ bool transact(v2::Session next,live::Mode mode,edit::Pattern pattern);
+ bool commitEdit(edit::Pattern pattern);
+ void numericEdit(int index,int row);
+ bool deliver(const v2::Session& next,live::Mode mode,const edit::Pattern& pattern);
  void choice(int x,int y,int kind);
- void exportMidi(v2::RenderEnding ending);
+ void exportMidi();
  void redraw();
  v2::Session session_{};
+ edit::Pattern editable_{};
+ std::array<edit::Step,16> clipboard_{};
+ bool copied_=false;
+ VSTGUI::CTextEdit* textInput_{};
+ int editIndex_=-1,editRow_=-1;
+ const char* help_{"NOTE ON: click | SHIFT+click: LOCK | PITCH/VELOCITY/LENGTH: double-click"};
  live::Mode mode_{live::Mode::Transport};
  VSTGUI::VST3Editor* editor_{};
  EbmPanel* panel_{};

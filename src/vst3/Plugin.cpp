@@ -5,6 +5,7 @@
 #include "ebm/MidiWriter.hpp"
 #include "vstgui/lib/cfileselector.h"
 #include "vstgui/lib/cframe.h"
+#include "vstgui/lib/controls/ctextedit.h"
 #include "vstgui/lib/controls/coptionmenu.h"
 #include "public.sdk/source/main/pluginfactory.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -24,9 +25,12 @@ bool readDocument(IBStream* stream,host::Document& document) noexcept {
     if(!stream)return false;
     host::DocumentBytes bytes{};
     int32 count=0;
-    if(stream->read(bytes.data(),static_cast<int32>(bytes.size()),&count)!=kResultOk ||
-       count!=static_cast<int32>(bytes.size()))return false;
-    return host::decode(bytes.data(),bytes.size(),document);
+    if(stream->read(bytes.data(),8,&count)!=kResultOk || count!=8)return false;
+    const bool old=bytes[3]=='1'&&bytes[4]==1;
+    const auto size=old?host::kLegacyDocumentBytes:host::kDocumentBytes;
+    if(stream->read(bytes.data()+8,static_cast<int32>(size-8),&count)!=kResultOk ||
+       count!=static_cast<int32>(size-8))return false;
+    return host::decode(bytes.data(),size,document);
 }
 bool writeDocument(IBStream* stream,const host::Document& document) noexcept {
     if(!stream)return false;
@@ -92,7 +96,7 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         block.ppqValid=(context->state&ProcessContext::kProjectTimeMusicValid)!=0;
         block.playing=(context->state&ProcessContext::kPlaying)!=0;
         if(block.tempoValid)block.tempo=context->tempo;
-        if(block.ppqValid)block.projectPpq=context->projectTimeMusic;
+        if(block.ppqValid)block.projectPpq=context->projectTimeMusic-4.*(model_.songStartBar()-1);
     }
     live::Trigger triggers[live::Runtime::maxTriggers]{};
     int count=0;
@@ -163,29 +167,30 @@ tresult PLUGIN_API Processor::notify(IMessage* msg){
 }
 
 tresult PLUGIN_API Controller::initialize(FUnknown* context){
-    const auto result=EditController::initialize(context);
-    if(result!=kResultOk)return result;
-    auto* param=new RangeParameter(STR16("Playback Trigger"),TriggerModeId,
-                                   STR16(""),0.,1.,0.,1,ParameterInfo::kCanAutomate);
-    param->setPrecision(0);
-    parameters.addParameter(param);
-    // Constructor defaults correspond to the Processor's default composed riff.
-    (void)session_.generate();
-    return kResultOk;
+ const auto result=EditController::initialize(context);
+ if(result!=kResultOk)return result;
+ auto* param=new RangeParameter(STR16("Playback Trigger"),TriggerModeId,
+                                  STR16(""),0.,1.,0.,1,ParameterInfo::kCanAutomate);
+ param->setPrecision(0);parameters.addParameter(param);
+ (void)session_.generate();
+ editable_=edit::fromPhrase(v2::render(session_.current()),8,edit::Scale::Chromatic,2);
+ return kResultOk;
 }
 tresult PLUGIN_API Controller::setComponentState(IBStream* stream){
  host::Document doc;
  if(!readDocument(stream,doc))return kResultFalse;
  try{
   v2::Session next;next.restore(doc.session);
-  session_=std::move(next);
-  mode_=doc.mode;
-  bar_=std::clamp(bar_,0,session_.options().bars-1);
+  auto pat=doc.editable.enabled?doc.editable:
+            edit::fromPhrase(next.hasCurrent()?v2::render(next.current()):Phrase{next.options().bars,{}},
+                             next.options().bars,edit::Scale::Chromatic,1);
+  if(!edit::valid(pat))return kResultFalse;
+  session_=std::move(next);editable_=pat;mode_=doc.mode;
+  bar_=std::clamp(bar_,0,editable_.bars-1);
   EditController::setParamNormalized(TriggerModeId,mode_==live::Mode::Transport?0.:1.);
   redraw();return kResultOk;
  }catch(...){return kResultFalse;}
 }
-// Zoom and active BAR are UI-only and never overwrite the Processor musical state.
 tresult PLUGIN_API Controller::getState(IBStream* stream){
  if(!stream)return kInvalidArgument;
  const std::uint32_t bytes[3]{0x554D4245u,zoom_>1.25?150u:100u,static_cast<std::uint32_t>(bar_)};
@@ -197,154 +202,240 @@ tresult PLUGIN_API Controller::setState(IBStream* stream){
  if(!stream)return kInvalidArgument;
  std::uint32_t bytes[3]{};int32 count=0;
  if(stream->read(bytes,sizeof(bytes),&count)!=kResultOk || count!=sizeof(bytes) ||
-    bytes[0]!=0x554D4245u || (bytes[1]!=100&&bytes[1]!=150) ||
-    bytes[2]>=8)return kResultFalse;
- zoom_=bytes[1]/100.;bar_=std::clamp(static_cast<int>(bytes[2]),0,session_.options().bars-1);
+    bytes[0]!=0x554D4245u || (bytes[1]!=100&&bytes[1]!=150) || bytes[2]>=8)return kResultFalse;
+ zoom_=bytes[1]/100.;bar_=std::clamp(static_cast<int>(bytes[2]),0,editable_.bars-1);
  if(editor_)editor_->setZoomFactor(zoom_);
  redraw();return kResultOk;
 }
 tresult PLUGIN_API Controller::setParamNormalized(ParamID id,ParamValue v){
  const auto result=EditController::setParamNormalized(id,v);
- if(result==kResultOk && id==TriggerModeId && std::isfinite(v)){
+ if(result==kResultOk&&id==TriggerModeId&&std::isfinite(v)){
   mode_=v<0.5?live::Mode::Transport:live::Mode::MidiNote;
   redraw();
  }
  return result;
 }
 IPlugView* PLUGIN_API Controller::createView(FIDString type){
- if(!type || std::strcmp(type,ViewType::kEditor)!=0)return nullptr;
+ if(!type||std::strcmp(type,ViewType::kEditor)!=0)return nullptr;
  auto* view=new VSTGUI::VST3Editor(this,"EBMView","ebm.uidesc");
  view->setAllowedZoomFactors(std::vector<double>{1.0,1.5});
  view->setEditorSizeConstrains(VSTGUI::CPoint(ui::width,ui::height),VSTGUI::CPoint(ui::width,ui::height));
- editor_=view;
- editor_->setZoomFactor(zoom_);
- return view;
+ editor_=view;editor_->setZoomFactor(zoom_);return view;
 }
 VSTGUI::CView* Controller::createCustomView(VSTGUI::UTF8StringPtr name,
-   const VSTGUI::UIAttributes& attributes,const VSTGUI::IUIDescription*,VSTGUI::VST3Editor*){
+   const VSTGUI::UIAttributes& attr,const VSTGUI::IUIDescription*,VSTGUI::VST3Editor*){
  if(!name)return nullptr;
  VSTGUI::CPoint origin{0.,0.},size{1100.,590.};
- attributes.getPointAttribute("origin",origin);
- attributes.getPointAttribute("size",size);
+ attr.getPointAttribute("origin",origin);attr.getPointAttribute("size",size);
  if(std::strcmp(name,"EbmPanel")==0){panel_=new EbmPanel(VSTGUI::CRect(origin,size),this);return panel_;}
  if(std::strcmp(name,"EbmBrand")==0)return new EbmBrand(VSTGUI::CRect(origin,size));
  return nullptr;
 }
 void Controller::willClose(VSTGUI::VST3Editor* closed){
- if(editor_==closed){editor_=nullptr;panel_=nullptr;}
+ if(editor_==closed){editor_=nullptr;panel_=nullptr;textInput_=nullptr;editIndex_=-1;editRow_=-1;}
 }
 void Controller::redraw(){if(panel_)panel_->invalid();}
-bool Controller::deliver(const v2::Session& next,live::Mode mode){
- host::Document doc{next.snapshot(),mode};
+bool Controller::deliver(const v2::Session& next,live::Mode mode,const edit::Pattern& pattern){
+ host::Document doc{next.snapshot(),mode,pattern};
  host::DocumentBytes bytes{};
  if(!host::encode(doc,bytes))return false;
- auto* message=allocateMessage();
- if(!message)return false;
+ auto* message=allocateMessage();if(!message)return false;
  message->setMessageID("125A_EBM_FULL_DOCUMENT_V1");
  const auto attributes=message->getAttributes();
  if(!attributes || attributes->setBinary("State",bytes.data(),static_cast<uint32>(bytes.size()))!=kResultOk){
   message->release();return false;
  }
- const bool ok=sendMessage(message)==kResultOk;
- message->release();return ok;
+ const bool sent=sendMessage(message)==kResultOk;message->release();return sent;
 }
-bool Controller::transact(v2::Session next,live::Mode mode){
- if(!deliver(next,mode)){status_="HOST UPDATE FAILED";redraw();return false;}
- session_=std::move(next);mode_=mode;
- bar_=std::clamp(bar_,0,session_.options().bars-1);
- status_="PATTERN SENT TO HOST";
- redraw();return true;
+bool Controller::transact(v2::Session next,live::Mode mode,edit::Pattern pattern){
+ if(!edit::valid(pattern)||!deliver(next,mode,pattern)){
+  status_="HOST UPDATE FAILED";redraw();return false;
+ }
+ session_=std::move(next);mode_=mode;editable_=std::move(pattern);
+ bar_=std::clamp(bar_,0,editable_.bars-1);
+ status_="PATTERN SENT TO HOST";redraw();return true;
 }
+bool Controller::commitEdit(edit::Pattern pattern){return transact(session_,mode_,std::move(pattern));}
 void Controller::setVariationFromPixel(int x){
  const int value=ui::variationValue(x);
  if(value==session_.options().variation)return;
  try{
   auto next=session_;
   if(next.hasCurrent())(void)next.variate(value);
-  else{auto s=next.snapshot();s.options.variation=value;next.restore(s);}
-  (void)transact(std::move(next),mode_);
+  else {auto st=next.snapshot();st.options.variation=value;next.restore(st);}
+  auto updated=editable_;
+  if(next.hasCurrent()){
+   auto fresh=edit::fromPhrase(v2::render(next.current()),updated.bars,updated.scale,updated.songStartBar);
+   for(int i=0;i<edit::kMaxSteps;++i)if(updated.steps[static_cast<std::size_t>(i)].locked)
+       fresh.steps[static_cast<std::size_t>(i)]=updated.steps[static_cast<std::size_t>(i)];
+   updated=std::move(fresh);
+  }
+  (void)transact(std::move(next),mode_,std::move(updated));
  }catch(...){status_="INVALID VARIATION";redraw();}
 }
 void Controller::choice(int x,int y,int kind){
  if(!editor_||!editor_->getFrame()||!panel_)return;
  auto* menu=new VSTGUI::COptionMenu;
- const auto add=[&](const std::string& label,int value,bool selected){
-  auto* item=new VSTGUI::CMenuItem(label.c_str(),value);
+ const auto add=[&](const std::string& title,int value,bool selected){
+  auto* item=new VSTGUI::CMenuItem(title.c_str(),value);
   if(selected)item->setChecked(true);
   menu->addEntry(item);
  };
+ static constexpr const char* notes[]{"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
  if(kind==0){
-  for(int value=0;value<3;++value)
-   add(styleName(static_cast<Style>(value)),value,static_cast<int>(session_.options().style)==value);
+  for(int value=0;value<3;++value)add(styleName(static_cast<Style>(value)),value,static_cast<int>(session_.options().style)==value);
  }else if(kind==1){
-  for(int b:{4,8})add(std::to_string(b)+" BARS",b,session_.options().bars==b);
- }else{
-  static constexpr const char* notes[]{"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
-  for(int midi=24;midi<=60;++midi)
-   add(std::string(notes[midi%12])+std::to_string(midi/12-1),midi,midi==session_.options().rootMidi);
+  for(int b:{1,2,4,8})add(std::to_string(b)+" BARS",b,editable_.bars==b);
+ }else if(kind==2){
+  for(int midi=24;midi<=60;++midi)add(std::string(notes[midi%12])+std::to_string(midi/12-1),midi,midi==session_.options().rootMidi);
+ }else if(kind==3){
+  add("CHROMATIC",0,editable_.scale==edit::Scale::Chromatic);
+  add("MAJOR",1,editable_.scale==edit::Scale::Major);
+  add("NATURAL MINOR",2,editable_.scale==edit::Scale::NaturalMinor);
+ }else if(kind==4){
+  for(int b=1;b<=16;++b)add("DAW BAR "+std::to_string(b),b,b==editable_.songStartBar);
+ }else if(kind==5){
+  const int index=bar_*16+editIndex_;
+  const auto root=session_.options().rootMidi;
+  for(int midi=24;midi<=84;++midi){
+   if(!edit::inScale(midi,root,editable_.scale))continue;
+   add(std::string(notes[midi%12])+std::to_string(midi/12-1),midi,
+       editable_.steps[static_cast<std::size_t>(index)].pitch==midi);
+  }
  }
- VSTGUI::CPoint where{static_cast<VSTGUI::CCoord>(x),static_cast<VSTGUI::CCoord>(y)};
- panel_->localToFrame(where);
- if(!menu->popup(editor_->getFrame(),where,[this,kind](VSTGUI::COptionMenu* opened){
-  int index=-1;
-  auto* selected=opened->getLastItemMenu(index);
+ VSTGUI::CPoint point{static_cast<VSTGUI::CCoord>(x),static_cast<VSTGUI::CCoord>(y)};
+ panel_->localToFrame(point);
+ if(!menu->popup(editor_->getFrame(),point,[this,kind](VSTGUI::COptionMenu* opened){
+  int index=-1;auto* selected=opened->getLastItemMenu(index);
   if(selected&&index>=0){
    auto* item=selected->getEntry(index);
-   if(item && item->getTag()>=0){
+   if(item&&item->getTag()>=0){
     try{
-     auto next=session_;
-     const int value=item->getTag();
-     if(kind==0){next.setStyle(static_cast<Style>(value));(void)next.generate();}
-     else if(kind==1){next.setBars(value);if(!next.hasCurrent())(void)next.generate();}
-     else next.setRootMidi(value);
-     (void)transact(std::move(next),mode_);
+     const int value=item->getTag();auto next=session_;auto pat=editable_;
+     if(kind==0){
+      next.setStyle(static_cast<Style>(value));(void)next.generate();
+      auto fresh=edit::fromPhrase(v2::render(next.current()),pat.bars,pat.scale,pat.songStartBar);
+      for(int i=0;i<edit::kMaxSteps;++i)if(pat.steps[static_cast<std::size_t>(i)].locked)
+          fresh.steps[static_cast<std::size_t>(i)]=pat.steps[static_cast<std::size_t>(i)];
+      pat=std::move(fresh);
+     }else if(kind==1){
+      const int engineBars=value<=4?4:8;
+      if(next.options().bars!=engineBars)next.setBars(engineBars);
+      if(!next.hasCurrent())(void)next.generate();
+      pat.bars=value;
+     }else if(kind==2){
+      const int transpose=value-next.options().rootMidi;
+      next.setRootMidi(value);
+      for(auto& st:pat.steps)if(st.on&&!st.locked)
+        st.pitch=static_cast<std::uint8_t>(std::clamp(static_cast<int>(st.pitch)+transpose,0,127));
+     }else if(kind==3){
+      pat.scale=static_cast<edit::Scale>(value);
+      for(auto& st:pat.steps)if(st.on&&!st.locked)
+       st.pitch=static_cast<std::uint8_t>(edit::nearestPitch(st.pitch,next.options().rootMidi,pat.scale));
+     }else if(kind==4)pat.songStartBar=value;
+     else if(kind==5){
+      const int ix=bar_*16+editIndex_;
+      if(ix>=0&&ix<edit::kMaxSteps)
+       (void)edit::modify(pat,ix,value,pat.steps[static_cast<std::size_t>(ix)].velocity,
+                          pat.steps[static_cast<std::size_t>(ix)].length);
+     }
+     (void)transact(std::move(next),mode_,std::move(pat));
     }catch(...){status_="INVALID SELECTION";redraw();}
    }
   }
   opened->forget();redraw();
  }))menu->forget();
 }
-void Controller::exportMidi(v2::RenderEnding ending){
- if(!session_.hasCurrent()){status_="GENERATE A RIFF FIRST";redraw();return;}
+void Controller::numericEdit(int index,int row){
+ if(!editor_||!editor_->getFrame()||index<0||index>=editable_.bars*16)return;
+ auto* frame=editor_->getFrame();
+ if(!textInput_){
+  textInput_=new VSTGUI::CTextEdit(VSTGUI::CRect(0,0,49,48),this,9100,"100");
+  textInput_->setBackColor(VSTGUI::CColor{30,47,60,255});
+  textInput_->setFontColor(VSTGUI::CColor{255,255,255,255});
+  textInput_->setHoriAlign(VSTGUI::kCenterText);
+  frame->addView(textInput_);
+ }
+ editIndex_=index;editRow_=row;
+ const auto& st=editable_.steps[static_cast<std::size_t>(index)];
+ const int value=row==2?st.velocity:st.length;
+ const int x=ui::gridX+(index%16)*ui::cellW,y=ui::gridY+row*ui::rowH;
+ textInput_->setViewSize(VSTGUI::CRect(x,y,x+49,y+48));
+ textInput_->setText(std::to_string(value).c_str());
+ textInput_->setVisible(true);
+ frame->setFocusView(textInput_);
+}
+void Controller::valueChanged(VSTGUI::CControl* control){
+ if(!textInput_||control!=textInput_||editIndex_<0)return;
+ try{
+  const int value=std::stoi(textInput_->getText().data());
+  auto pat=editable_;const auto& st=pat.steps[static_cast<std::size_t>(editIndex_)];
+  if(editRow_==2 && value>=1 && value<=127)
+   (void)edit::modify(pat,editIndex_,st.pitch,value,st.length);
+  else if(editRow_==3 && value>=1 && value<=128)
+   (void)edit::modify(pat,editIndex_,st.pitch,st.velocity,value);
+  else {status_="ENTER A VALID NUMBER";redraw();return;}
+  (void)commitEdit(std::move(pat));
+ }catch(...){status_="INVALID NUMBER";redraw();}
+ textInput_->setVisible(false);editIndex_=-1;editRow_=-1;
+}
+void Controller::hover(int x,int y){
+ using ui::Target;
+ const char* next="CLICK TO EDIT | CTRL+CLICK: RESET";
+ switch(ui::hit(x,y).target){
+ case Target::NoteOn:next="NOTE ON: click toggle | SHIFT+click LOCK | CTRL+click reset";break;
+ case Target::Pitch:next="PITCH: double-click choose scale note | CTRL+click root";break;
+ case Target::Velocity:next="VELOCITY: double-click enter 1-127 | CTRL+click 100";break;
+ case Target::Length:next="LENGTH: double-click enter 1-128 sixteenths | CTRL+click 1";break;
+ case Target::Bars:next="BARS: choose 1 / 2 / 4 / 8";break;
+ case Target::SongStart:next="SONG START: DAW bar at which pattern bar 1 starts";break;
+ case Target::Copy:next="COPY BAR: store selected 16 steps";break;
+ case Target::Paste:next="PASTE BAR: paste into current bar (LOCKED steps protected)";break;
+ case Target::Export:next="EXPORT MIDI: exports exactly the selected bar count";break;
+ default:break;
+ }
+ if(help_!=next){help_=next;redraw();}
+}
+void Controller::exportMidi(){
  if(!editor_||!editor_->getFrame()){status_="NO EDITOR";redraw();return;}
  auto* chooser=VSTGUI::CNewFileSelector::create(editor_->getFrame(),VSTGUI::CNewFileSelector::kSelectSaveFile);
  if(!chooser){status_="SAVE DIALOG FAILED";redraw();return;}
  chooser->setTitle("Export EBM MIDI");
- chooser->setDefaultSaveName(ending==v2::RenderEnding::Loopable?"125A EBM Loop.mid":"125A EBM One-Shot.mid");
+ chooser->setDefaultSaveName("125A EBM Bassline.mid");
  chooser->setDefaultExtension(VSTGUI::CFileExtension("Standard MIDI File","mid"));
- if(chooser->runModal() && chooser->getNumSelectedFiles()>0){
+ if(chooser->runModal()&&chooser->getNumSelectedFiles()>0){
   try{
    const auto* path=chooser->getSelectedFile(0);
-   const auto bytes=toMidi(v2::render(session_.current(),ending));
-   if(!path || bytes.empty())status_="MIDI EXPORT FAILED";
+   const auto bytes=toMidi(edit::toPhrase(editable_));
+   if(!path||bytes.empty())status_="MIDI EXPORT FAILED";
    else{
-    std::ofstream output(std::filesystem::u8path(path),std::ios::binary|std::ios::trunc);
-    if(output){output.write(reinterpret_cast<const char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));
-       output.flush();status_=output.good()?"MIDI EXPORTED":"WRITE FAILED";}
+    std::ofstream out(std::filesystem::u8path(path),std::ios::binary|std::ios::trunc);
+    if(out){out.write(reinterpret_cast<const char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));
+       out.flush();status_=out.good()?"MIDI EXPORTED":"WRITE FAILED";}
     else status_="SAVE PATH FAILED";
    }
   }catch(...){status_="EXPORT FAILED";}
  }
  chooser->forget();redraw();
 }
-void Controller::click(int x,int y,bool ctrl){
+void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
  using ui::Target;
- switch(ui::hit(x,y).target){
- case Target::Style:
-  if(ctrl){auto next=session_;next.setStyle(Style::ClassicEBM);if(!next.hasCurrent())(void)next.generate();(void)transact(std::move(next),mode_);}
-  else choice(x,y,0);break;
- case Target::Bars:
-  if(ctrl){auto next=session_;next.setBars(ui::defaultValue(Target::Bars));if(!next.hasCurrent())(void)next.generate();(void)transact(std::move(next),mode_);}
-  else choice(x,y,1);break;
- case Target::Root:
-  if(ctrl){auto next=session_;next.setRootMidi(ui::defaultValue(Target::Root));(void)transact(std::move(next),mode_);}
-  else choice(x,y,2);break;
- case Target::Variation:
-  if(ctrl)setVariationFromPixel(618+ui::defaultValue(Target::Variation)*240/100);
-  break;
+ const auto target=ui::hit(x,y);const int index=bar_*16+target.column;
+ switch(target.target){
+ case Target::Style:if(ctrl){auto next=session_;next.setStyle(Style::ClassicEBM);
+   (void)next.generate();auto pat=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
+   (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,0);break;
+ case Target::Bars:if(ctrl){auto next=editable_;next.bars=8;(void)commitEdit(next);}else choice(x,y,1);break;
+ case Target::Root:if(ctrl){auto next=session_;const int offset=36-next.options().rootMidi;next.setRootMidi(36);
+   auto pat=editable_;for(auto& s:pat.steps)if(s.on&&!s.locked)
+     s.pitch=static_cast<std::uint8_t>(std::clamp(static_cast<int>(s.pitch)+offset,0,127));
+   (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,2);break;
+ case Target::Scale:if(ctrl){auto p=editable_;p.scale=edit::Scale::Chromatic;(void)commitEdit(p);}else choice(x,y,3);break;
+ case Target::Variation:if(ctrl)setVariationFromPixel(628+30*141/100);break;
+ case Target::SongStart:if(ctrl){auto p=editable_;p.songStartBar=2;(void)commitEdit(p);}else choice(x,y,4);break;
  case Target::Trigger:{
   const auto desired=ctrl?live::Mode::Transport:(mode_==live::Mode::Transport?live::Mode::MidiNote:live::Mode::Transport);
-  if(deliver(session_,desired)){
+  if(deliver(session_,desired,editable_)){
    beginEdit(TriggerModeId);
    EditController::setParamNormalized(TriggerModeId,desired==live::Mode::MidiNote?1.:0.);
    performEdit(TriggerModeId,desired==live::Mode::MidiNote?1.:0.);
@@ -352,21 +443,63 @@ void Controller::click(int x,int y,bool ctrl){
   }else status_="HOST UPDATE FAILED";
   redraw();break;
  }
- case Target::Zoom:
-  zoom_=zoom_>1.25?1.0:1.5;
-  if(editor_)editor_->setZoomFactor(zoom_);
-  redraw();break;
+ case Target::Zoom:zoom_=zoom_>1.25?1.0:1.5;if(editor_)editor_->setZoomFactor(zoom_);redraw();break;
  case Target::PrevBar:bar_=std::max(0,bar_-1);redraw();break;
- case Target::NextBar:bar_=std::min(session_.options().bars-1,bar_+1);redraw();break;
- case Target::Generate:{auto next=session_;(void)next.generate();(void)transact(std::move(next),mode_);break;}
+ case Target::NextBar:bar_=std::min(editable_.bars-1,bar_+1);redraw();break;
+ case Target::Bar:if(target.column<editable_.bars){bar_=target.column;redraw();}break;
+ case Target::Generate:{
+  auto next=session_;(void)next.generate();
+  auto p=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
+  for(int i=0;i<edit::kMaxSteps;++i)if(editable_.steps[static_cast<std::size_t>(i)].locked)
+   p.steps[static_cast<std::size_t>(i)]=editable_.steps[static_cast<std::size_t>(i)];
+  (void)transact(std::move(next),mode_,std::move(p));break;
+ }
  case Target::Variate:{
-  auto next=session_;if(!next.nextVariant()){
-   status_="NO CHANGE (VARIATION 0%?)";redraw();
-  }else (void)transact(std::move(next),mode_);
+  auto next=session_;if(!next.nextVariant()){status_="NO NEW VARIATION";redraw();break;}
+  auto p=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
+  for(int i=0;i<edit::kMaxSteps;++i)if(editable_.steps[static_cast<std::size_t>(i)].locked)
+   p.steps[static_cast<std::size_t>(i)]=editable_.steps[static_cast<std::size_t>(i)];
+  (void)transact(std::move(next),mode_,std::move(p));break;
+ }
+ case Target::Clear:{auto p=editable_;(void)edit::clear(p);(void)commitEdit(std::move(p));break;}
+ case Target::Copy:{for(int j=0;j<16;++j)clipboard_[static_cast<std::size_t>(j)]=editable_.steps[static_cast<std::size_t>(bar_*16+j)];
+  copied_=true;status_="BAR COPIED";redraw();break;}
+ case Target::Paste:{
+  if(!copied_){status_="COPY A BAR FIRST";redraw();break;}
+  auto p=editable_;bool allowed=true;
+  for(int j=0;j<16;++j)if(p.steps[static_cast<std::size_t>(bar_*16+j)].locked)allowed=false;
+  if(!allowed){status_="DESTINATION LOCKED";redraw();break;}
+  for(int j=0;j<16;++j)p.steps[static_cast<std::size_t>(bar_*16+j)]=clipboard_[static_cast<std::size_t>(j)];
+  (void)commitEdit(std::move(p));break;
+ }
+ case Target::Export:exportMidi();break;
+ case Target::NoteOn:{
+  auto p=editable_;
+  if(shift)p.steps[static_cast<std::size_t>(index)].locked=!p.steps[static_cast<std::size_t>(index)].locked;
+  else if(ctrl){auto& st=p.steps[static_cast<std::size_t>(index)];
+   if(!st.locked){st.on=false;st.pitch=static_cast<std::uint8_t>(session_.options().rootMidi);st.velocity=100;st.length=1;}}
+  else {const bool old=p.steps[static_cast<std::size_t>(index)].on;
+   if(edit::toggle(p,index)&&!old)
+    p.steps[static_cast<std::size_t>(index)].pitch=static_cast<std::uint8_t>(
+      edit::nearestPitch(session_.options().rootMidi,session_.options().rootMidi,p.scale));
+  }
+  (void)commitEdit(std::move(p));break;
+ }
+ case Target::Pitch:{
+  if(editable_.steps[static_cast<std::size_t>(index)].locked)break;
+  if(ctrl){auto p=editable_;auto& st=p.steps[static_cast<std::size_t>(index)];
+   (void)edit::modify(p,index,session_.options().rootMidi,st.velocity,st.length);(void)commitEdit(std::move(p));}
+  else if(doubleClick){editIndex_=target.column;choice(x,y,5);}break;
+ }
+ case Target::Velocity:case Target::Length:{
+  if(editable_.steps[static_cast<std::size_t>(index)].locked)break;
+  if(ctrl){auto p=editable_;const auto& st=p.steps[static_cast<std::size_t>(index)];
+   (void)edit::modify(p,index,st.pitch,target.target==Target::Velocity?100:st.velocity,
+                       target.target==Target::Length?1:st.length);
+   (void)commitEdit(std::move(p));}
+  else if(doubleClick)numericEdit(index,target.row);
   break;
  }
- case Target::ExportLoop:exportMidi(v2::RenderEnding::Loopable);break;
- case Target::ExportOneShot:exportMidi(v2::RenderEnding::OneShot);break;
  default:break;
  }
 }

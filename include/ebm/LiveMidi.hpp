@@ -63,7 +63,7 @@ public:
             !std::isfinite(block.tempo) || block.tempo<=0. || block.tempo>1000. ||
             triggerCount<0 || triggerCount>maxTriggers ||
             (triggerCount>0 && triggers==nullptr) ||
-            !pattern.ready || (pattern.bars!=4 && pattern.bars!=8) ||
+            !pattern.ready || (pattern.bars!=1 && pattern.bars!=2 && pattern.bars!=4 && pattern.bars!=8) ||
             pattern.lengthSteps!=pattern.bars*16) {
             haveExpected_=false;
             if (!release(0,sink)) return false;
@@ -76,7 +76,7 @@ public:
             haveExpected_=false;seenMode_=mode_;
         }
         if (!haveRevision_ || block.revision!=seenRevision_) {
-            if (haveRevision_ && !release(0,sink)) return false;
+            if (haveRevision_ && !release(0,sink)) return false; // keep trigger/phase, release only voice
             haveRevision_=true;seenRevision_=block.revision;
             // In MidiNote mode retain the held trigger and musical phase.
         }

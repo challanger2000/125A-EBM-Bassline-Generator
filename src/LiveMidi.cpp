@@ -2,7 +2,7 @@
 
 namespace ebm::live {
 bool prepare(const Phrase& phrase,Pattern& dest) noexcept {
-    if (phrase.bars!=4 && phrase.bars!=8) return false;
+    if (phrase.bars!=1 && phrase.bars!=2 && phrase.bars!=4 && phrase.bars!=8) return false;
     const int length=phrase.bars*16;
     Pattern candidate;
     candidate.bars=phrase.bars;candidate.lengthSteps=length;

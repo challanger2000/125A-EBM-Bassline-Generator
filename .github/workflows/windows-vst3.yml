@@ -8,9 +8,12 @@ on:
       - 'resource/**'
       - 'src/HostBridge.cpp'
       - 'include/ebm/HostBridge.hpp'
+      - 'include/ebm/EditPattern.hpp'
+      - 'src/LiveMidi.cpp'
+      - 'include/ebm/LiveMidi.hpp'
+      - 'tests/edit_pattern_tests.cpp'
       - 'tests/host_bridge_tests.cpp'
       - 'tests/gui_policy_tests.cpp'
-      - 'tests/vst3_host_probe.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-vst3.yml'
   workflow_dispatch:
@@ -25,7 +28,7 @@ jobs:
       - name: Configure Steinberg SDK 3.8.1 Windows x64
         shell: pwsh
         run: cmake -S . -B build-vst3 -G "Visual Studio 17 2022" -A x64 -DEBM_ENABLE_VST3=ON
-      - name: Build experimental GUI VST3 and 15 C++ tests
+      - name: Build experimental GUI VST3 and 16 C++ tests
         shell: pwsh
         run: >-
           cmake --build build-vst3 --config Release --parallel 4 --target
@@ -34,7 +37,7 @@ jobs:
           ebm_groove_interlock_tests ebm_session_tests ebm_alternative_tests
           ebm_rhythmic_novelty_tests ebm_core_novelty_tests
           ebm_loop_boundary_tests ebm_live_midi_tests ebm_host_bridge_tests
-          ebm_gui_policy_tests
+          ebm_gui_policy_tests ebm_edit_pattern_tests
       - name: Run all Windows core and GUI regressions
         shell: pwsh
         run: ctest --test-dir build-vst3 -C Release --output-on-failure -j 4
@@ -69,10 +72,10 @@ jobs:
           $expected=(Get-FileHash -Algorithm SHA256 'resource/125A_Logo_Master_FINAL.svg').Hash
           $actual=(Get-FileHash -Algorithm SHA256 $logo).Hash
           if ($expected -ne $actual) { throw '125A logo differs from repository master copy' }
-      - name: Build native independent VST3 GUI/Controller/Processor host probe
+      - name: Build independent VST3 host lifecycle / state probe
         shell: pwsh
         run: cmake --build build-vst3 --config Release --parallel 4 --target EBMHostProbe
-      - name: Verify native message routing and five editor lifecycles
+      - name: Probe native state and five Windows editor lifecycles
         shell: pwsh
         timeout-minutes: 5
         run: |
@@ -93,6 +96,6 @@ jobs:
       - name: Archive experimental GUI plugin (NOT FINAL)
         uses: actions/upload-artifact@v4
         with:
-          name: 125A-EBM-v0.2-EXPERIMENTAL-GUI-Windows-x64
+          name: 125A-EBM-v0.2-EDITABLE-GUI-Windows-x64
           path: stage/
           if-no-files-found: error

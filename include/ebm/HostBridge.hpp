@@ -1,6 +1,7 @@
 #pragma once
 #include "ebm/LiveMidi.hpp"
 #include "ebm/Session.hpp"
+#include "ebm/EditPattern.hpp"
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -13,9 +14,11 @@ namespace ebm::host {
 struct Document {
     v2::SessionState session;
     live::Mode mode=live::Mode::Transport;
+    edit::Pattern editable{};
 };
 constexpr std::size_t kMaximumHistory=48;
-constexpr std::size_t kDocumentBytes=8+12+1+12+1+1+1+12*kMaximumHistory+4;
+constexpr std::size_t kLegacyDocumentBytes=8+12+1+12+1+1+1+12*kMaximumHistory+4;
+constexpr std::size_t kDocumentBytes=kLegacyDocumentBytes+5+edit::kMaxSteps*5;
 using DocumentBytes=std::array<std::uint8_t,kDocumentBytes>;
 bool encode(const Document& source,DocumentBytes& target) noexcept;
 bool decode(const std::uint8_t* bytes,std::size_t count,Document& destination) noexcept;
@@ -58,6 +61,7 @@ public:
     bool nextVariant();
     void setMode(live::Mode mode) noexcept;
     live::Mode mode() const noexcept;
+    int songStartBar() const noexcept {return songStart_.load(std::memory_order_acquire);}
     void resetRuntime() noexcept; // only after output bus disconnect
     template<class Sink>
     bool process(live::Block block,const live::Trigger* triggers,int count,Sink&& sink) noexcept {
@@ -72,6 +76,8 @@ private:
     bool publishSession(const v2::Session& chosen);
     mutable std::mutex documentMutex_;
     v2::Session session_{};
+    edit::Pattern editable_{};
+    std::atomic<int> songStart_{1};
     std::atomic<live::Mode> mode_{live::Mode::Transport};
     PatternExchange patterns_{};
     live::Runtime runtime_{};
