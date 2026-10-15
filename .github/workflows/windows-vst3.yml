@@ -124,7 +124,7 @@ jobs:
       - name: Archive experimental GUI plugin (NOT FINAL)
         uses: actions/upload-artifact@v4
         with:
-          name: 125A-EBM-v0.2-CODEX-RC-Windows-x64
+          name: 125A-EBM-v0.2-MIDI-PHASE-RC-Windows-x64
           path: stage/
           if-no-files-found: error
       - name: Publish precise QA job summary

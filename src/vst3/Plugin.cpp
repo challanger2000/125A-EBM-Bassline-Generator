@@ -102,6 +102,7 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
     block.sampleRate=sampleRate_;
     const auto* context=data.processContext;
     if(context){
+        block.transportValid=true;
         block.tempoValid=(context->state&ProcessContext::kTempoValid)!=0;
         block.ppqValid=(context->state&ProcessContext::kProjectTimeMusicValid)!=0;
         block.playing=(context->state&ProcessContext::kPlaying)!=0;

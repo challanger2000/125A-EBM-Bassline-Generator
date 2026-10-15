@@ -35,6 +35,7 @@ struct Block {
     double tempo=120.;
     double projectPpq=0.; // absolute DAW quarter notes
     bool playing=false;
+    bool transportValid=false; // host transport state supplied; stopped live input is valid
     bool ppqValid=false;
     bool tempoValid=false;
     // Bump when replacing a prepared pattern. Keep same revision for read-only blocks.
@@ -58,11 +59,12 @@ public:
     // reset() ONLY after output disconnection/deactivation, not for live edits.
     void reset() noexcept {
         activePitch_=-1; activeBasePitch_=-1;activeDuration_=0;triggerHeld_=false; triggerPitch_=-1;
+        phaseRunning_=false;haveTransportState_=false;wasPlaying_=false;
         triggerPhase_=0.;expectedPpq_=0.;haveExpected_=false;
         haveRevision_=false; failedOff_=false; seenMode_=mode_;
     }
     template<class Sink> bool stop(Sink& sink) noexcept {
-        triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;haveExpected_=false;
+        triggerHeld_=false;triggerPitch_=-1;phaseRunning_=false;triggerPhase_=0.;haveExpected_=false;
         return release(0,sink);
     }
     template<class Sink>
@@ -83,6 +85,7 @@ public:
         if (mode_!=seenMode_) {
             if (!release(0,sink)) return cancelInput();
             triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;
+            phaseRunning_=false;haveTransportState_=false;
             haveExpected_=false;seenMode_=mode_;
         }
         if (!haveRevision_ || block.revision!=seenRevision_) {
@@ -111,6 +114,14 @@ public:
             return schedule(pattern,block,block.projectPpq*4.,0,block.samples,rate,sink);
         }
         haveExpected_=false;
+        // A NoteOff is a gate closure, not a clock reset. Only an explicit
+        // transport running -> stopped edge (or stop/lifecycle/mode/state)
+        // ends the sequence. Constant stopped transport permits live playing.
+        if(block.transportValid){
+            const bool stopped=haveTransportState_&&wasPlaying_&&!block.playing;
+            haveTransportState_=true;wasPlaying_=block.playing;
+            if(stopped)return stop(sink); // stop dominates chase/input in this callback
+        }
         if (triggerCount>0 && block.samples==0) return false;
         std::array<Trigger,maxTriggers> ordered{};
         for (int i=0;i<triggerCount;++i) {
@@ -129,11 +140,10 @@ public:
         int pos=0;
         for (int i=0;i<triggerCount;++i) {
             const Trigger e=ordered[static_cast<std::size_t>(i)];
-            if (triggerHeld_ && e.offset>pos) {
-                if (!schedule(pattern,block,triggerPhase_,pos,e.offset-pos,rate,sink)) {
-                    triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;return false;
-                }
-                advance(e.offset-pos,rate,pattern.lengthSteps);
+            if (e.offset>pos) {
+                if (triggerHeld_ && !schedule(pattern,block,triggerPhase_,pos,e.offset-pos,rate,sink))
+                    return cancelInput();
+                if (phaseRunning_)advance(e.offset-pos,rate,pattern.lengthSteps);
             }
             pos=e.offset;
             if (!e.on) {
@@ -144,16 +154,17 @@ public:
                     for(int next=i+1;next<triggerCount&&ordered[static_cast<std::size_t>(next)].offset==pos;++next)
                         replacement=replacement||ordered[static_cast<std::size_t>(next)].on;
                     if(!replacement){
-                        // Input NoteOff owns the stop even when the output bus
-                        // temporarily rejects its corresponding bass NoteOff.
-                        // The pending output NoteOff is retried next callback.
-                        triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;
+                        // Close the sound gate immediately, including across
+                        // callback boundaries. Keep the silent clock running:
+                        // neither a short nor a long gap implies a restart.
+                        triggerHeld_=false;triggerPitch_=-1;
                         if (!release(pos,sink)) return cancelInput();
                     }
                 }
             } else if(!triggerHeld_) {
                 if (!release(pos,sink)) return cancelInput();
-                triggerHeld_=true;triggerPitch_=e.pitch;triggerPhase_=0.;
+                triggerHeld_=true;triggerPitch_=e.pitch;
+                if(!phaseRunning_){triggerPhase_=0.;phaseRunning_=true;}
             } else if(e.pitch!=triggerPitch_) {
                 // New chord root while a trigger is held: RETUNE, never seek.
                 // Preserve the original sounding note's remaining gate.
@@ -163,7 +174,7 @@ public:
                 if (!release(pos,sink))return cancelInput();
                 triggerPitch_=e.pitch;
                 if(savedBase>=0 && block.gatePercent>0 &&
-                   triggerPhase_ < savedStart+savedDuration*block.gatePercent/100.){
+                   triggerPhase_+1.e-8 < savedStart+savedDuration*block.gatePercent/100.){
                     const int mapped=harmony::chordPitch(savedBase,block.songRoot,e.pitch,block.scale);
                     if(!sink(Output{pos,mapped,savedVel,true}))return cancelInput();
                     activePitch_=mapped;activeBasePitch_=savedBase;
@@ -171,15 +182,15 @@ public:
                 }
             } // Repeated NoteOn for an already held pitch is harmless.
         }
-        if (triggerHeld_ && pos<block.samples) {
-            if (!schedule(pattern,block,triggerPhase_,pos,block.samples-pos,rate,sink))return cancelInput();
-            advance(block.samples-pos,rate,pattern.lengthSteps);
+        if (pos<block.samples) {
+            if (triggerHeld_ && !schedule(pattern,block,triggerPhase_,pos,block.samples-pos,rate,sink))return cancelInput();
+            if(phaseRunning_)advance(block.samples-pos,rate,pattern.lengthSteps);
         }
         return true;
     }
 private:
     bool cancelInput() noexcept {
-        triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;return false;
+        triggerHeld_=false;triggerPitch_=-1;phaseRunning_=false;triggerPhase_=0.;return false;
     }
     template<class Sink> bool release(int offset,Sink& sink) noexcept {
         if (activePitch_<0) { failedOff_=false;return true; }
@@ -241,6 +252,7 @@ private:
     int activePitch_=-1,activeBasePitch_=-1,activeVelocity_=0,activeDuration_=0;
     int triggerPitch_=-1,seenLength_=0;
     double activeStart_=0.;
+    bool phaseRunning_=false,haveTransportState_=false,wasPlaying_=false;
     bool triggerHeld_=false,haveExpected_=false,failedOff_=false,haveRevision_=false;
     double triggerPhase_=0.,expectedPpq_=0.;
     std::uint64_t seenRevision_=0;

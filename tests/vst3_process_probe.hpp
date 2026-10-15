@@ -66,6 +66,50 @@ inline int processChecks(Steinberg::Vst::IComponent* component,const host::Docum
   PROBE(audio->process(data)!=kResultOk);input.clear();PROBE(audio->process(data)==kResultOk);
   PROBE(output.getEventCount()==1&&output.getEventByIndex(0)->type==Event::kNoteOffEvent);
   output.clear();for(int n=0;n<32;++n)PROBE(audio->process(data)==kResultOk);PROBE(output.getEventCount()==0);
+  // Studio One-compatible VST3 delivery permutations, not a Studio One capture:
+  // 1-sample gaps, an Off at the last sample of one block, On in the next,
+  // and a long silent interval. Every generated onset keeps the original grid.
+  const auto savedDoc=doc;
+  doc.editable={};doc.editable.enabled=true;doc.editable.bars=1;doc.editable.songStartBar=1;
+  for(int step=0;step<16;++step)PROBE(edit::modify(doc.editable,step,48,100,1));
+  PROBE(restore());ctx.state|=ProcessContext::kPlaying;
+  const live::Trigger timeline[]={{0,48,true},{6100,48,false},{6101,52,true},
+     {12287,52,false},{12288,57,true},{18100,57,false},{40001,55,true},{49000,55,false}};
+  const int expectedTimes[]={0,6000,12000,18000,42000,48000};
+  const int expectedRoots[]={48,48,52,57,55,55};int emitted=0,voice=-1;
+  for(int origin=0;origin<50176;origin+=256){
+   ctx.projectTimeMusic=origin/24000.;input.clear();output.clear();
+   for(auto e:timeline)if(e.offset>=origin&&e.offset<origin+256)PROBE(note(e.pitch,e.offset-origin,e.on));
+   PROBE(audio->process(data)==kResultOk);
+   for(int32 n=0;n<output.getEventCount();++n){const auto* e=output.getEventByIndex(n);
+    if(e->type==Event::kNoteOnEvent){
+     PROBE(voice<0&&emitted<6);PROBE(origin+e->sampleOffset==expectedTimes[emitted]);
+     PROBE(e->noteOn.pitch==expectedRoots[emitted]);voice=e->noteOn.pitch;++emitted;
+    }else{PROBE(e->type==Event::kNoteOffEvent&&voice==e->noteOff.pitch);voice=-1;}
+   }
+  }
+  PROBE(emitted==6&&voice==-1);
+  // Overlap: new root before the old Off must retune at the On offset;
+  // the late old Off must not close the new owner's gate or restart phase.
+  PROBE(restore());input.clear();output.clear();PROBE(note(48,0,true));PROBE(audio->process(data)==kResultOk);
+  input.clear();output.clear();PROBE(note(52,31,true));PROBE(note(48,32,false));PROBE(audio->process(data)==kResultOk);
+  PROBE(output.getEventCount()==2&&output.getEventByIndex(0)->type==Event::kNoteOffEvent&&output.getEventByIndex(0)->sampleOffset==31);
+  PROBE(output.getEventByIndex(1)->type==Event::kNoteOnEvent&&output.getEventByIndex(1)->noteOn.pitch==52&&output.getEventByIndex(1)->sampleOffset==31);
+  input.clear();output.clear();PROBE(note(52,64,false));PROBE(audio->process(data)==kResultOk);
+  PROBE(output.getEventCount()==1&&output.getEventByIndex(0)->type==Event::kNoteOffEvent&&output.getEventByIndex(0)->sampleOffset==64);
+  // A real observed host stop closes the voice even with no input NoteOff,
+  // ignores same-callback chase, and a later stopped-live On starts at step 1.
+  PROBE(restore());input.clear();output.clear();PROBE(note(48,0,true));PROBE(audio->process(data)==kResultOk);
+  PROBE(output.getEventCount()==1);ctx.state&=~ProcessContext::kPlaying;
+  input.clear();output.clear();PROBE(note(52,0,true));PROBE(audio->process(data)==kResultOk);
+  PROBE(output.getEventCount()==1&&output.getEventByIndex(0)->type==Event::kNoteOffEvent&&output.getEventByIndex(0)->sampleOffset==0);
+  input.clear();output.clear();PROBE(audio->process(data)==kResultOk);PROBE(output.getEventCount()==0);
+  PROBE(note(55,7,true));PROBE(audio->process(data)==kResultOk);
+  PROBE(output.getEventCount()==1&&output.getEventByIndex(0)->type==Event::kNoteOnEvent&&output.getEventByIndex(0)->sampleOffset==7);
+  std::printf("PASS actual VST3 MIDI phase format %d: C/E/A/G, 1-sample/cross-block/long gaps, exact original grid, balanced voices, host stop/chase/live restart\n",format);
+  input.clear();output.clear();PROBE(note(55,0,false));PROBE(audio->process(data)==kResultOk);
+  PROBE(output.getEventCount()==1&&output.getEventByIndex(0)->type==Event::kNoteOffEvent);
+  doc=savedDoc;ctx.projectTimeMusic=0.;
   // Actual VST3 parameter queue: a late Gate=0 must not suppress the early NoteOn.
   doc.mode=live::Mode::Transport;PROBE(restore());ctx.state|=ProcessContext::kPlaying;
   changes.clearQueue();int32 qi=0,pi=0;auto* gate=changes.addParameterData(102,qi);PROBE(gate);

@@ -1,0 +1,3 @@
+PASS MIDI phase: 60 C/E/A/G gap/block/rate cases, exact grid/pitches, balanced voices, long silent wrap, same-key retrigger, explicit stop/retry/mode/live restart
+PASS repair policies, 12 decoded MIDI exports, coherent tuples (104093 acquisitions), control precedence, zero callback allocations
+Linux paced 48k/64: mean=0.697us p95=0.811us p99=1.582us max=61.852us timer-pair-mean=0.023us deadline=1333.333us overruns=0 (750 callbacks)

@@ -1,3 +1,7 @@
+> Follow-up: the subsequent MIDI NOTE phase defect and corrected candidate are
+> documented in [MIDI phase RC](MIDI-PHASE-RC-2026-10-15.md). This report records
+> the preserved earlier build; it does not certify separated trigger Off/On.
+
 # 125A EBM Bassline Generator v0.2 — technical RC QA
 
 Status: **development release candidate, NOT FINAL**. Report date: 2026-10-15.

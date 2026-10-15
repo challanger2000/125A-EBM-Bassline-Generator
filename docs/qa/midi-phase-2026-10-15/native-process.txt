@@ -1,0 +1,4 @@
+PASS actual VST3 MIDI phase format 0: C/E/A/G, 1-sample/cross-block/long gaps, exact original grid, balanced voices, host stop/chase/live restart
+PASS actual VST3 ProcessData format 0: invalid offsets/pitches/overflow, NoteOff retry, Gate/Mode offsets, lifecycle
+PASS actual VST3 MIDI phase format 1: C/E/A/G, 1-sample/cross-block/long gaps, exact original grid, balanced voices, host stop/chase/live restart
+PASS actual VST3 ProcessData format 1: invalid offsets/pitches/overflow, NoteOff retry, Gate/Mode offsets, lifecycle

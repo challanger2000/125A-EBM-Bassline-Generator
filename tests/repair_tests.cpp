@@ -1,4 +1,5 @@
 #include "ebm/Automation.hpp"
+#include "midi_phase_tests.hpp"
 #include "ebm/HostBridge.hpp"
 #include "ebm/MidiWriter.hpp"
 #include "../src/vst3/UiGeometry.hpp"
@@ -26,6 +27,7 @@ int main(int argc,char** argv){
   CHECK(vst3::ui::integer("12x",0,127,value)); // Must fail even with NDEBUG.
   return 0;
  }
+ CHECK(qa::midiPhaseTests()==0);
  for(auto bad:{"","12x","1.5"," 12","+12","-1","999999999999999999999"}){CHECK(!vst3::ui::integer(bad,0,127,value));CHECK(value==77);}
  CHECK(vst3::ui::integer("0",0,100,value)&&value==0);CHECK(vst3::ui::integer("127",1,127,value)&&value==127);
  edit::Pattern p;p.enabled=true;p.bars=1;

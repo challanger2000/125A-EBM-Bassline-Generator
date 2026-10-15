@@ -1,3 +1,6 @@
+> Current MIDI NOTE phase follow-up: [repair semantics, regressions and new RC](docs/MIDI-PHASE-RC-2026-10-15.md).
+> The earlier RC/build below is preserved; separated Off/On phase continuity is superseded by this follow-up.
+
 # 125A EBM Bassline Generator
 
 **Current development: v0.2 Windows x64 MIDI-only VST3 release candidate on
