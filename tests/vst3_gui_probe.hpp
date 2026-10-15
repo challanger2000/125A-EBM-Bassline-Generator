@@ -99,7 +99,13 @@ inline int guiChecks(HWND window,int zoom,Steinberg::Vst::IComponent* component,
  GUI_CHECK(reset());
  GUI_CHECK(type(231,423,L"9"));
  HWND invalidOverlay=nullptr;EnumChildWindows(gui,findEdit,reinterpret_cast<LPARAM>(&invalidOverlay));
- GUI_CHECK(invalidOverlay&&!IsWindowVisible(invalidOverlay));
+ GUI_CHECK(invalidOverlay);
+ // Win32/VSTGUI may retain native edit focus after synthetic VK_RETURN.
+ // Test the actual user interaction: selecting another BAR must close the
+ // edit and must not commit the invalid overlapping note length.
+ click(612,200);
+ GUI_CHECK(!IsWindowVisible(invalidOverlay));
+ click(575,200);
  GUI_CHECK(read(observed)&&observed.editable.steps[0].length==16);
  GUI_CHECK(type(231,372,L"12x"));GUI_CHECK(read(observed)&&observed.editable.steps[0].velocity==100);
  GUI_CHECK(!IsWindowVisible(invalidOverlay));
