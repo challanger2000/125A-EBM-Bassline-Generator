@@ -208,6 +208,8 @@ tresult PLUGIN_API Controller::initialize(FUnknown* context){
  param->setPrecision(0);parameters.addParameter(param);
  auto* gateParam=new RangeParameter(STR16("Global Gate"),GateId,STR16("%"),0.,100.,100.,0,ParameterInfo::kCanAutomate);
  gateParam->setPrecision(0);parameters.addParameter(gateParam);
+ auto* playheadParam=new RangeParameter(STR16("Pattern Playhead"),PlayheadStepId,STR16(""),0.,16.,16.,16,ParameterInfo::kIsReadOnly);
+ playheadParam->setPrecision(0);parameters.addParameter(playheadParam);
  (void)session_.generate();
  editable_=edit::fromPhrase(v2::render(session_.current()),8,edit::Scale::Chromatic,2);
  return kResultOk;
@@ -409,9 +411,13 @@ void Controller::choice(int x,int y,int kind){
       pat.bars=value;
      }else if(kind==2){
       const int transpose=value-next.options().rootMidi;
-      next.setRootMidi(value);
-      for(auto& st:pat.steps)if(st.on&&!st.locked)
-        st.pitch=static_cast<std::uint8_t>(std::clamp(static_cast<int>(st.pitch)+transpose,0,127));
+      bool safe=true;
+       for(const auto& st:pat.steps)if(st.on&&!st.locked)
+        if(static_cast<int>(st.pitch)+transpose<0||static_cast<int>(st.pitch)+transpose>127){safe=false;break;}
+       if(!safe){status_="ROOT OUT OF MIDI RANGE";redraw();return;}
+       next.setRootMidi(value);
+       for(auto& st:pat.steps)if(st.on&&!st.locked)
+        st.pitch=static_cast<std::uint8_t>(static_cast<int>(st.pitch)+transpose);
      }else if(kind==3){
       pat.scale=static_cast<edit::Scale>(value);
       edit::conformToScale(pat,next.options().rootMidi);
@@ -451,7 +457,10 @@ void Controller::numericEdit(int index,int row){
 void Controller::valueChanged(VSTGUI::CControl* control){
  if(!textInput_||control!=textInput_||editIndex_<0)return;
  try{
-  const int value=std::stoi(textInput_->getText().data());
+  const std::string input=textInput_->getText().data();
+   std::size_t consumed=0;
+   const int value=std::stoi(input,&consumed);
+   if(consumed!=input.size())throw std::invalid_argument("Invalid numeric suffix");
   auto pat=editable_;const auto& st=pat.steps[static_cast<std::size_t>(editIndex_)];
   if(editRow_==2 && value>=1 && value<=127)
    (void)edit::modify(pat,editIndex_,st.pitch,value,st.length);
@@ -513,12 +522,18 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
  case Target::Style:if(ctrl){auto next=session_;next.setStyle(Style::ClassicEBM);
    (void)next.generate();auto pat=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
    (void)edit::generateClassicDrive(pat,next.options().rootMidi,next.current().settings.seed);
+    for(int i=0;i<edit::kMaxSteps;++i)if(editable_.steps[static_cast<std::size_t>(i)].locked)
+      pat.steps[static_cast<std::size_t>(i)]=editable_.steps[static_cast<std::size_t>(i)];
    edit::conformToScale(pat,next.options().rootMidi);
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,0);break;
  case Target::Bars:if(ctrl){auto next=editable_;next.bars=8;(void)commitEdit(next);}else choice(x,y,1);break;
- case Target::Root:if(ctrl){auto next=session_;const int offset=48-next.options().rootMidi;next.setRootMidi(48);
-   auto pat=editable_;for(auto& s:pat.steps)if(s.on&&!s.locked)
-     s.pitch=static_cast<std::uint8_t>(std::clamp(static_cast<int>(s.pitch)+offset,0,127));
+ case Target::Root:if(ctrl){auto next=session_;const int offset=48-next.options().rootMidi;auto pat=editable_;bool safe=true;
+   for(const auto& s:pat.steps)if(s.on&&!s.locked)
+    if(static_cast<int>(s.pitch)+offset<0||static_cast<int>(s.pitch)+offset>127){safe=false;break;}
+   if(!safe){status_="ROOT RESET OUT OF MIDI RANGE";redraw();break;}
+   next.setRootMidi(48);
+   for(auto& s:pat.steps)if(s.on&&!s.locked)
+    s.pitch=static_cast<std::uint8_t>(static_cast<int>(s.pitch)+offset);
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,2);break;
  case Target::Scale:if(ctrl){auto p=editable_;p.scale=edit::Scale::Chromatic;(void)commitEdit(p);}else choice(x,y,3);break;
  case Target::Variation:if(ctrl)setVariationFromPixel(628+30*141/100);break;
