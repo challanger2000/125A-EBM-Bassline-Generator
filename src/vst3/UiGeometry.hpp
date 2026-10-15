@@ -1,5 +1,7 @@
 #pragma once
+#include "ebm/EditPattern.hpp"
 #include <algorithm>
+#include <cstdlib>
 #include <charconv>
 #include <string_view>
 namespace ebm::vst3::ui {
@@ -56,6 +58,22 @@ constexpr int dragValue(Target target,int base,int upwardPixels,int maxLength=12
  if(target==Target::Velocity)return std::clamp(base+upwardPixels/2,1,127);
  if(target==Target::Length)return std::clamp(base+upwardPixels/4,1,maxLength);
  return base;
+}
+// Shared mouse/menu policy: two octaves centered on ROOT, restricted to SCALE.
+// Existing serialized pitches outside this viewport are never rewritten.
+constexpr int pitchMin(int root) noexcept {return std::max(0,root-12);}
+constexpr int pitchMax(int root) noexcept {return std::min(127,root+12);}
+inline int pitchDrag(int start,int root,edit::Scale scale,int upwardPixels) noexcept {
+ const int moves=upwardPixels/8, direction=moves>0?1:-1;
+ int note=start;
+ for(int i=0;i<std::abs(moves);++i){
+  int next=note+direction;
+  while(next>=pitchMin(root)&&next<=pitchMax(root)&&!edit::inScale(next,root,scale))
+   next+=direction;
+  if(next<pitchMin(root)||next>pitchMax(root))break;
+  note=next;
+ }
+ return note;
 }
 constexpr int gateXStart=691,gateXEnd=836;
 constexpr int gateValue(int x) noexcept {return ((std::clamp(x,gateXStart,gateXEnd)-gateXStart)*100+72)/(gateXEnd-gateXStart);}
