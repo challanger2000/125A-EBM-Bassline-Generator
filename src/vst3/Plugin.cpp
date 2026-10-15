@@ -99,7 +99,7 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         block.ppqValid=(context->state&ProcessContext::kProjectTimeMusicValid)!=0;
         block.playing=(context->state&ProcessContext::kPlaying)!=0;
         if(block.tempoValid)block.tempo=context->tempo;
-        if(block.ppqValid)block.projectPpq=context->projectTimeMusic-4.*(model_.songStartBar()-1);
+        if(block.ppqValid)block.projectPpq=context->projectTimeMusic;
     }
     live::Trigger triggers[live::Runtime::maxTriggers]{};
     int count=0;
