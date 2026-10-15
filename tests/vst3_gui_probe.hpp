@@ -93,6 +93,7 @@ inline int guiChecks(HWND window,int zoom,Steinberg::Vst::IComponent* component,
  click(612,200);GUI_CHECK(!IsWindowVisible(numericOverlay));
  GUI_CHECK(read(observed)&&observed.editable.steps[0].length==1);
 
+ click(575,200); // Restore BAR 1 before testing the first enabled note.
  // An impossible LENGTH 9 overlaps the next enabled note at step 3.
  // The input must disappear and must not modify stored LENGTH.
  GUI_CHECK(reset());
