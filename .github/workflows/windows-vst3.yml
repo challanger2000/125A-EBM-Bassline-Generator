@@ -99,6 +99,38 @@ jobs:
           $plugin = (Resolve-Path 'stage/125A EBM Bassline Generator.vst3').Path
           & $validator.FullName -e $plugin
           if ($LASTEXITCODE -ne 0) { throw "Steinberg Validator failed: $LASTEXITCODE" }
+      # Tester artifact is the successful prebuilt portable Windows executable.
+      - name: Retrieve verified 125A Plugin Tester v0.2.9
+        uses: actions/download-artifact@v4
+        with:
+          name: 125A-Plugin-Tester-Windows-x64
+          repository: challanger2000/125A-Plugin-Tester-Final
+          run-id: 38745290599
+          github-token: ${{ github.token }}
+          path: 125a-tester
+      - name: Run production 125A Plugin Tester on staged EBM VST3
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          $tester = Get-ChildItem 125a-tester -Recurse -File -Filter '125A_Plugin_Tester.exe' | Select-Object -First 1
+          if (-not $tester) { throw 'Downloaded 125A Plugin Tester executable missing' }
+          $plugin = (Resolve-Path 'stage/125A EBM Bassline Generator.vst3').Path
+          $env:125A_PLUGIN_TESTER_REPORT_DIR = Join-Path (Get-Location) '125a-qa-reports'
+          New-Item -ItemType Directory -Force -Path $env:125A_PLUGIN_TESTER_REPORT_DIR | Out-Null
+          $process = Start-Process -FilePath $tester.FullName -ArgumentList @('--portable-test', $plugin) -Wait -PassThru
+          Get-ChildItem $env:125A_PLUGIN_TESTER_REPORT_DIR -File | ForEach-Object { Write-Host "QA REPORT: $($_.Name)" }
+          if ($process.ExitCode -ne 0) { throw "125A tester exit $($process.ExitCode); review uploaded QA reports" }
+          $reports = @(Get-ChildItem $env:125A_PLUGIN_TESTER_REPORT_DIR -File -Filter '*_125A_QA_Report.json')
+          if ($reports.Count -ne 1) { throw "Expected exactly one 125A JSON report; found $($reports.Count)" }
+          $result = Get-Content -Raw $reports[0].FullName | ConvertFrom-Json
+          if ($result.status -ne 'PASS') { throw "125A report status $($result.status), not PASS" }
+      - name: Archive production 125A tester evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: EBM-125A-Tester-QA-Reports
+          path: 125a-qa-reports/
+          if-no-files-found: warn
       - name: Archive experimental GUI plugin (NOT FINAL)
         uses: actions/upload-artifact@v4
         with:
