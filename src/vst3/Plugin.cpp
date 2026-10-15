@@ -453,7 +453,10 @@ void Controller::numericEdit(int index,int row){
  }
  editIndex_=index;editRow_=row;
  const auto& st=editable_.steps[static_cast<std::size_t>(index)];
- const int value=row==2?st.velocity:st.length;
+ int effectiveLength=std::min<int>(st.length,editable_.bars*16-index);
+ if(row==3)for(int next=index+1;next<editable_.bars*16;++next)
+  if(editable_.steps[static_cast<std::size_t>(next)].on){effectiveLength=std::min(effectiveLength,next-index);break;}
+ const int value=row==2?st.velocity:effectiveLength;
  const int x=ui::gridX+(index%16)*ui::cellW,y=ui::gridY+row*ui::rowH;
  textInput_->setViewSize(VSTGUI::CRect(x,y,x+49,y+48));
  textInput_->setText(std::to_string(value).c_str());
@@ -470,8 +473,13 @@ void Controller::valueChanged(VSTGUI::CControl* control){
   auto pat=editable_;const auto& st=pat.steps[static_cast<std::size_t>(editIndex_)];
   if(editRow_==2 && value>=1 && value<=127)
    (void)edit::modify(pat,editIndex_,st.pitch,value,st.length);
-  else if(editRow_==3 && value>=1 && value<=128)
+  else if(editRow_==3 && value>=1 && value<=128){
+   int maximum=editable_.bars*16-editIndex_;
+   for(int next=editIndex_+1;next<editable_.bars*16;++next)
+    if(editable_.steps[static_cast<std::size_t>(next)].on){maximum=next-editIndex_;break;}
+   if(value>maximum){status_="LENGTH EXCEEDS NEXT NOTE";redraw();return;}
    (void)edit::modify(pat,editIndex_,st.pitch,st.velocity,value);
+  }
   else {status_="ENTER A VALID NUMBER";redraw();return;}
   (void)commitEdit(std::move(pat));
  }catch(...){status_="INVALID NUMBER";redraw();}
