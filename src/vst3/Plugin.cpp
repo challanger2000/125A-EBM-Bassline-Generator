@@ -301,6 +301,12 @@ bool Controller::transact(v2::Session next,live::Mode mode,edit::Pattern pattern
  status_="PATTERN SENT TO HOST";redraw();return true;
 }
 bool Controller::commitEdit(edit::Pattern pattern){return transact(session_,mode_,std::move(pattern));}
+void Controller::beginGateGesture(){
+ if(!gateGestureOpen_){beginEdit(GateId);gateGestureOpen_=true;}
+}
+void Controller::endGateGesture(){
+ if(gateGestureOpen_){endEdit(GateId);gateGestureOpen_=false;}
+}
 void Controller::setGateFromPixel(int x){
  const int proposed=ui::gateValue(x);
  if(proposed==gate_)return;
@@ -315,10 +321,10 @@ void Controller::setGateFromPixel(int x){
  msg->release();
  if(!sent){status_="GATE UPDATE FAILED";redraw();return;}
  gate_=proposed;
- beginEdit(GateId);
+ if(!gateGestureOpen_)beginEdit(GateId);
  EditController::setParamNormalized(GateId,gate_/100.);
  performEdit(GateId,gate_/100.);
- endEdit(GateId);
+ if(!gateGestureOpen_)endEdit(GateId);
  status_="GLOBAL GATE UPDATED";redraw();
 }
 void Controller::setVariationFromPixel(int x){
