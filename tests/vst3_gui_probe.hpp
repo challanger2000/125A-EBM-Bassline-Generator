@@ -103,6 +103,14 @@ inline int guiChecks(HWND window,int zoom,Steinberg::Vst::IComponent* component,
  GUI_CHECK(read(observed)&&observed.editable.steps[0].length==16);
  GUI_CHECK(type(231,372,L"12x"));GUI_CHECK(read(observed)&&observed.editable.steps[0].velocity==100);
  GUI_CHECK(!IsWindowVisible(invalidOverlay));
+ // Switching to a different cell or command must not strand a numeric
+ // overlay over a now-unrelated step, including at 150% scaling.
+ SendMessageW(gui,WM_LBUTTONDBLCLK,MK_LBUTTON,MAKELPARAM(231*zoom/100,423*zoom/100));
+ EnumChildWindows(gui,findEdit,reinterpret_cast<LPARAM>(&numericOverlay));
+ GUI_CHECK(numericOverlay&&IsWindowVisible(numericOverlay));
+ click(280,372); // Other step's VELOCITY, not the edited LENGTH cell.
+ GUI_CHECK(!IsWindowVisible(numericOverlay));
+ GUI_CHECK(read(observed)&&observed.editable.steps[0].length==16);
  GUI_CHECK(processorPoint->disconnect(controllerPoint)==kResultOk);GUI_CHECK(controllerPoint->disconnect(processorPoint)==kResultOk);
  processorPoint->release();controllerPoint->release();controller->setComponentHandler(nullptr);handler->release();
  std::printf("PASS native GUI %d%%: actual NOTE toggles, Dirty, STYLE reset LOCK, Gate drag gesture, wheel, actual Win32 EDIT typing and malformed rejection\n",zoom);
