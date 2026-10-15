@@ -26,10 +26,10 @@ int main(){
  }
  // The read-only guide stays strictly between the BAR arrows and BAR tabs,
  // above the 16 STEP numbers; it must not intercept any mouse action.
- CHECK(scaleGuideX>=204 && scaleGuideNotesX>=scaleGuideX+scaleGuideLabelW);
- CHECK(scaleGuideNotesX+scaleGuideNotesW<550);
- CHECK(scaleGuideY+scaleGuideH<=222);
- CHECK(hit(scaleGuideNotesX+50,scaleGuideY+10).target==Target::None);
+ static_assert(scaleGuideX>=204 && scaleGuideNotesX>=scaleGuideX+scaleGuideLabelW);
+ static_assert(scaleGuideNotesX+scaleGuideNotesW<550);
+ static_assert(scaleGuideY+scaleGuideH<=222);
+ static_assert(hit(scaleGuideNotesX+50,scaleGuideY+10).target==Target::None);
  // Exact pitch-class set comes from inScale(), not a separate mode table.
  const auto names=[](int key,edit::Scale scale){
   const auto notes=edit::triggerScaleNotes(key,scale);
