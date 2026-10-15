@@ -298,6 +298,8 @@ bool Controller::transact(v2::Session next,live::Mode mode,edit::Pattern pattern
  }
  session_=std::move(next);mode_=mode;editable_=std::move(pattern);
  bar_=std::clamp(bar_,0,editable_.bars-1);
+ // Non-parameterized musical edits must mark the host project modified.
+ if(auto* handler2=componentHandler2){(void)handler2->setDirty(true);}
  status_="PATTERN SENT TO HOST";redraw();return true;
 }
 bool Controller::commitEdit(edit::Pattern pattern){return transact(session_,mode_,std::move(pattern));}
