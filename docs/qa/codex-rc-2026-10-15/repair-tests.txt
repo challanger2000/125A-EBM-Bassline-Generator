@@ -1,0 +1,2 @@
+PASS repair policies, 12 decoded MIDI exports, coherent tuples (88336 acquisitions), control precedence, zero callback allocations
+Linux paced 48k/64: mean=0.346us p95=0.661us p99=0.912us max=13.540us timer-pair-mean=0.024us deadline=1333.333us overruns=0 (750 callbacks)

@@ -11,6 +11,8 @@
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/gui/iplugview.h"
 #include "ebm/HostBridge.hpp"
+#include "vst3_process_probe.hpp"
+#include "vst3_gui_probe.hpp"
 #include <array>
 #include <atomic>
 #include <cstring>
@@ -20,9 +22,15 @@ using namespace Steinberg;
 using namespace Steinberg::Vst;
 namespace Hosting=VST3::Hosting;
 #define CHECK(x) do {if(!(x)){std::cerr<<"HOST FAIL line "<<__LINE__<<" "<<#x<<"\n";return 2;}}while(false)
+LRESULT CALLBACK probeWindow(HWND h,UINT message,WPARAM w,LPARAM l){
+ if(message==WM_GETMINMAXINFO){auto* info=reinterpret_cast<MINMAXINFO*>(l);info->ptMaxTrackSize={4096,4096};return 0;}
+ return DefWindowProcW(h,message,w,l);
+}
 class Frame final:public IPlugFrame {
+ HWND window_{};
  std::atomic<uint32> refs_{1};
 public:
+ explicit Frame(HWND window):window_(window){}
  tresult PLUGIN_API queryInterface(const TUID iid,void** result) override {
   if(!result)return kInvalidArgument;
   *result=nullptr;
@@ -31,8 +39,13 @@ public:
  }
  uint32 PLUGIN_API addRef() override {return ++refs_;}
  uint32 PLUGIN_API release() override {const auto n=--refs_;if(!n)delete this;return n;}
- tresult PLUGIN_API resizeView(IPlugView*,ViewRect* r) override {
-  return r&&r->right>r->left&&r->bottom>r->top?kResultTrue:kInvalidArgument;
+ tresult PLUGIN_API resizeView(IPlugView* view,ViewRect* r) override {
+  if(!r||r->right<=r->left||r->bottom<=r->top)return kInvalidArgument;
+  RECT outer{0,0,r->right-r->left,r->bottom-r->top};
+  if(!AdjustWindowRect(&outer,WS_OVERLAPPEDWINDOW,FALSE))return kResultFalse;
+  if(!SetWindowPos(window_,nullptr,0,0,outer.right-outer.left,outer.bottom-outer.top,
+                   SWP_NOMOVE|SWP_NOZORDER))return kResultFalse;
+  return view->onSize(r);
  }
 };
 int main(int argc,char** argv){
@@ -115,23 +128,31 @@ int main(int argc,char** argv){
  MemoryStream stillValid;
  CHECK(controller->getState(&stillValid)==kResultOk);
  CHECK(std::memcmp(stillValid.getData(),displayState,sizeof(displayState))==0);
+ CHECK(ebm::qa::processChecks(component.get(),old)==0);
  const wchar_t cls[]=L"EBMHostProbeWindow";
- WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=DefWindowProcW;
+ WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpfnWndProc=probeWindow;
  wc.lpszClassName=cls;
  CHECK(RegisterClassW(&wc)!=0);
- for(int n=0;n<20;++n){
+ for(std::uint32_t zoom:{100u,150u})for(int n=0;n<20;++n){
+   std::uint32_t display[3]{0x554D4245u,zoom,0u};MemoryStream selectedZoom(display,sizeof(display));
+   CHECK(controller->setState(&selectedZoom)==kResultOk);
   HWND window=CreateWindowExW(0,cls,L"125A EBM QA",WS_OVERLAPPEDWINDOW,
                  50,50,1710,940,nullptr,nullptr,wc.hInstance,nullptr);
   CHECK(window!=nullptr);
   auto* view=controller->createView(ViewType::kEditor);
   CHECK(view!=nullptr);
-  auto* frame=new Frame;
+  auto* frame=new Frame(window);
   CHECK(view->setFrame(frame)==kResultTrue);
   CHECK(view->isPlatformTypeSupported(kPlatformTypeHWND)==kResultTrue);
   CHECK(view->attached(reinterpret_cast<void*>(window),kPlatformTypeHWND)==kResultTrue);
   ViewRect area{};
   CHECK(view->getSize(&area)==kResultTrue);
-  CHECK(area.right>area.left&&area.bottom>area.top);
+  CHECK(area.right-area.left==1100*static_cast<int>(zoom)/100);
+  CHECK(area.bottom-area.top==590*static_cast<int>(zoom)/100);
+  CHECK(frame->resizeView(view,&area)==kResultTrue);
+  RECT client{};CHECK(GetClientRect(window,&client));
+  CHECK(client.right==area.right-area.left&&client.bottom==area.bottom-area.top);
+  if(n==0)CHECK(ebm::qa::guiChecks(window,static_cast<int>(zoom),component.get(),controller.get(),old)==0);
   MSG wmsg{};
   while(PeekMessageW(&wmsg,nullptr,0,0,PM_REMOVE)){
    TranslateMessage(&wmsg);DispatchMessageW(&wmsg);
@@ -139,7 +160,7 @@ int main(int argc,char** argv){
   CHECK(view->removed()==kResultTrue);
   view->setFrame(nullptr);view->release();frame->release();DestroyWindow(window);
  }
- std::cout<<"PASS native VST3: event buses, document message to Processor, corrupted rejection, persistent GUI 150%, twenty Win32 editor attach/detach cycles\n";
+ std::cout<<"PASS native VST3: event buses, document message to Processor, corrupted rejection, persistent GUI state, forty Win32 editor attach/detach cycles (20 each at 100/150%) with exact HWND size\n";
  return 0;
 }
 #else

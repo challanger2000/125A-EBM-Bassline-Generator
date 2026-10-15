@@ -64,6 +64,9 @@ public:
  int playhead() const noexcept {return playhead_;}
  void setVariationFromPixel(int x);
  void setGateFromPixel(int x);
+ void setGateValue(int value);
+ void setVariationValue(int value);
+ bool wheel(int x,int y,int direction);
  void beginGateGesture();
  void endGateGesture();
  int gate() const noexcept {return gate_;}

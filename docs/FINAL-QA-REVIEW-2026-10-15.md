@@ -1,3 +1,6 @@
+> Historical checkpoint. Current repair/QA authority: [Final-QA RC](FINAL-QA-CODEX-RC-2026-10-15.md).
+> Contracts or unverified statuses below describe the named earlier baseline.
+
 # 125A EBM Bassline Generator — independent Final-QA review (2026-10-15)
 
 **Verdict: NOT RELEASE READY.** This is a read-only source/QA-evidence review of development baseline `c311bed6a4c0b1ed0ede44acacecb69a8f36492b` on `research/v0.2.0-musical-foundation`. The shipped experimental VST3 and `main` remain unchanged. No new Windows binary, new independent Windows test, or 125A Tester run is claimed.

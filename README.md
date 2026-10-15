@@ -1,6 +1,32 @@
 # 125A EBM Bassline Generator
 
-**Current status: experimental musical-engine v0.2.0, expanded grammar checkpoint. Not a VST3. Not release-ready.**
+**Current development: v0.2 Windows x64 MIDI-only VST3 release candidate on
+`fix/p1-codex-qa-2026-10-15`. NOT FINAL; owner Studio One 8.1.2 and local
+125A Plugin Tester acceptance are required for this new binary.**
+
+Current implementation, all 15 repair findings, compatibility and measured QA:
+[`docs/FINAL-QA-CODEX-RC-2026-10-15.md`](docs/FINAL-QA-CODEX-RC-2026-10-15.md).
+The previously owner-tested binary source `b1d28792eb0da6471698488995b24a8adff5179b`
+and `main` remain unchanged. This is a new development candidate, not a customer release.
+
+Local core verification (no Actions): `cmake -S . -B ../build-ebm -DCMAKE_BUILD_TYPE=Release`,
+`cmake --build ../build-ebm --parallel 4`, `ctest --test-dir ../build-ebm --output-on-failure`.
+Windows VST3 uses `-DEBM_ENABLE_VST3=ON`, SDK `v3.8.1_build_84`; the workflow packages
+and validates the exact staged bundle. Do not run 125A Plugin Tester in Actions.
+
+Current editor: STYLE, BARS 1/2/4/8, ROOT, ten SCALES and trigger guide, VARIATION,
+SONG START, MIDI NOTE/TRANSPORT, editable NOTE/LOCK/PITCH/VELOCITY/LENGTH,
+GLOBAL GATE, copy/paste/clear, MIDI export, playhead, 100/150% zoom.
+Velocity, Length, Variation and Gate support wheel ±1; the latter four numerical
+values support double-click integer entry. Ctrl-click restores defined defaults.
+Gate uses its existing integer 0–100% domain, now correctly advertised as 100
+VST3 steps; parameter IDs, normalized range and EBM1/2/3 document bytes remain stable.
+
+## Historical standalone-engine research
+
+The following chronology documents earlier engine milestones. Statements such as
+“not VST3”, old suite counts or “not wired” describe those historical checkpoints;
+they are not the current candidate status. Their original musical algorithms remain unchanged.
 
 The engine develops original monophonic MIDI phrases using musical *roles* instead of the independent onset/pitch lottery used by v0.1. Each profile uses a different compositional grammar; every bar carries stable motif event IDs and explicit transformation records. A separate event-lineage audit now reconstructs each later bar from its original motif and named edits, rejecting undocumented pitch, velocity, gate, role or rhythm modifications. The three hand-authored v0.2 reference riffs are **specification fixtures**, not notes copied into the generator. No artist MIDI patterns are bundled.
 

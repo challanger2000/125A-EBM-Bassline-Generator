@@ -1,0 +1,2 @@
+PASS actual VST3 ProcessData format 0: invalid offsets/pitches/overflow, NoteOff retry, Gate/Mode offsets, lifecycle
+PASS actual VST3 ProcessData format 1: invalid offsets/pitches/overflow, NoteOff retry, Gate/Mode offsets, lifecycle

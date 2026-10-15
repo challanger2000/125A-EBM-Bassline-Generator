@@ -1,6 +1,14 @@
 #pragma once
 #include <algorithm>
+#include <charconv>
+#include <string_view>
 namespace ebm::vst3::ui {
+inline bool integer(std::string_view text,int minimum,int maximum,int& value) noexcept {
+ if(text.empty()||text.front()<'0'||text.front()>'9')return false;
+ int parsed=0;const auto result=std::from_chars(text.data(),text.data()+text.size(),parsed);
+ if(result.ec!=std::errc{}||result.ptr!=text.data()+text.size()||parsed<minimum||parsed>maximum)return false;
+ value=parsed;return true;
+}
 constexpr int width=1100,height=590,gridX=206,gridY=250,cellW=51,rowH=51;
 // Read-only scale guide lives in the BAR-header row, clear of both the
 // direct BAR buttons at x>=550 and the STEP numbers below y=222.

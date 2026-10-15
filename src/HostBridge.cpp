@@ -136,8 +136,9 @@ bool PatternExchange::publish(const PreparedState& source) noexcept {
     const auto& pattern=source.pattern;
     if(!pattern.ready || (pattern.bars!=1&&pattern.bars!=2&&pattern.bars!=4&&pattern.bars!=8) ||
        pattern.lengthSteps!=pattern.bars*16 || source.root<0 || source.root>127 ||
-       source.songStart<1 || source.songStart>16 ||
-       static_cast<int>(source.scale)<0 || static_cast<int>(source.scale)>=edit::kScaleCount)return false;
+       source.songStart<1 || source.songStart>9999 || source.gate<0 || source.gate>100 ||
+       (source.mode!=live::Mode::Transport&&source.mode!=live::Mode::MidiNote) ||
+       static_cast<int>(source.scale)>=edit::kScaleCount)return false;
     std::lock_guard<std::mutex> guard(writerMutex_);
     for(int i=0;i<3;++i){
         int expected=Free;
@@ -172,23 +173,23 @@ const PreparedState* PatternExchange::acquire(std::uint64_t& revision) noexcept 
     return active_<0?nullptr:&slots_[static_cast<std::size_t>(active_)].data;
 }
 Model::Model(){
-    // Default is ready for a transport test even before a GUI exists.
-    v2::Session prepared;
-    (void)prepared.generate();
-    if(!publishSession(prepared))throw std::logic_error("default EBM pattern unavailable");
-    session_=std::move(prepared);
+    v2::Session prepared;(void)prepared.generate();
+    Document doc{prepared.snapshot(),live::Mode::Transport,
+                 edit::fromPhrase(v2::render(prepared.current()),8,edit::Scale::Chromatic,2),100};
+    if(!restore(doc))throw std::logic_error("default EBM pattern unavailable");
 }
 bool Model::publishSession(const v2::Session& chosen) {
     const int bars=chosen.options().bars;
     Phrase phrase{bars,{}};
     if(chosen.hasCurrent())phrase=v2::render(chosen.current());
-    PreparedState compiled;
+    PreparedState compiled=defaults_;
+    compiled.resetOnAdopt=false;
     compiled.root=chosen.options().rootMidi;
     compiled.scale=edit::Scale::Chromatic;
     compiled.songStart=1;
     return live::prepare(phrase,compiled.pattern) && patterns_.publish(compiled);
 }
-bool Model::restore(const Document& doc) {
+bool Model::restore(const Document& doc,bool restoreControls) {
     std::lock_guard<std::mutex> guard(documentMutex_);
     try {
         if(!validModel(doc))return false;
@@ -196,23 +197,32 @@ bool Model::restore(const Document& doc) {
         next.restore(doc.session);
         Phrase phrase=doc.editable.enabled?edit::toPhrase(doc.editable):
             (next.hasCurrent()?v2::render(next.current()):Phrase{next.options().bars,{}});
-        PreparedState compiled{};
+        PreparedState compiled=defaults_;
+        compiled.resetOnAdopt=restoreControls;
+        if(restoreControls){
+            compiled.gate=doc.gatePercent;compiled.mode=doc.mode;
+            compiled.gateTicket=gateControl_.load(std::memory_order_acquire);
+            compiled.modeTicket=modeControl_.load(std::memory_order_acquire);
+        }
         compiled.root=doc.session.options.rootMidi;
         compiled.scale=doc.editable.scale;
         compiled.songStart=doc.editable.enabled?doc.editable.songStartBar:1;
         if(!live::prepare(phrase,compiled.pattern) || !patterns_.publish(compiled))return false;
         session_=std::move(next);
         editable_=doc.editable;
-        gate_.store(doc.gatePercent,std::memory_order_release);
+        defaults_=compiled;
+        gateDefault_.store((compiled.gateTicket&~std::uint64_t{255})|static_cast<unsigned>(compiled.gate),std::memory_order_release);
+        modeDefault_.store((compiled.modeTicket&~std::uint64_t{255})|static_cast<unsigned>(compiled.mode),std::memory_order_release);
         songStart_.store(doc.editable.enabled?doc.editable.songStartBar:1,
                          std::memory_order_release);
-        mode_.store(doc.mode,std::memory_order_release);
         return true;
     }catch(...) {return false;}
 }
 Document Model::snapshot() const {
     std::lock_guard<std::mutex> guard(documentMutex_);
-    return Document{session_.snapshot(),mode_.load(std::memory_order_acquire),editable_,gate_.load(std::memory_order_acquire)};
+    const auto g=gateControl_.load(std::memory_order_acquire),m=modeControl_.load(std::memory_order_acquire);
+    return Document{session_.snapshot(),m==defaults_.modeTicket?defaults_.mode:static_cast<live::Mode>(m&255u),
+                    editable_,g==defaults_.gateTicket?defaults_.gate:static_cast<int>(g&255u)};
 }
 bool Model::generate(){
     std::lock_guard<std::mutex> guard(documentMutex_);
@@ -241,10 +251,25 @@ bool Model::nextVariant(){
         return true;
     }catch(...) {return false;}
 }
-void Model::setMode(live::Mode mode) noexcept {
-    if(mode==live::Mode::Transport||mode==live::Mode::MidiNote)
-        mode_.store(mode,std::memory_order_release);
+namespace {
+bool command(std::atomic<std::uint64_t>& target,unsigned value) noexcept {
+    auto old=target.load(std::memory_order_relaxed);
+    for(int attempt=0;attempt<8;++attempt){
+        const auto next=((old+256u)&~std::uint64_t{255})|value;
+        if(target.compare_exchange_strong(old,next,std::memory_order_release,std::memory_order_relaxed))return true;
+    }
+    return false; // Bounded contention failure; caller must not claim success.
 }
-live::Mode Model::mode() const noexcept {return mode_.load(std::memory_order_acquire);}
-void Model::resetRuntime() noexcept {runtime_.reset();}
+int resolved(const std::atomic<std::uint64_t>& control,const std::atomic<std::uint64_t>& base) noexcept {
+    const auto c=control.load(std::memory_order_acquire),b=base.load(std::memory_order_acquire);
+    return static_cast<int>(((c>>8)==(b>>8)?b:c)&255u);
+}
+}
+bool Model::setMode(live::Mode mode) noexcept {
+    return (mode==live::Mode::Transport||mode==live::Mode::MidiNote)&&command(modeControl_,static_cast<unsigned>(mode));
+}
+live::Mode Model::mode() const noexcept {return static_cast<live::Mode>(resolved(modeControl_,modeDefault_));}
+bool Model::setGate(int value) noexcept {return value>=0&&value<=100&&command(gateControl_,static_cast<unsigned>(value));}
+int Model::gate() const noexcept {return resolved(gateControl_,gateDefault_);}
+void Model::resetRuntime() noexcept {runtime_.reset();playhead_=-1;}
 } // namespace ebm::host

@@ -3,6 +3,7 @@
 #include "EbmBrand.hpp"
 #include "UiGeometry.hpp"
 #include "ebm/MidiWriter.hpp"
+#include "ebm/Automation.hpp"
 #include "vstgui/lib/cfileselector.h"
 #include "vstgui/lib/cframe.h"
 #include "vstgui/lib/controls/ctextedit.h"
@@ -71,25 +72,31 @@ tresult PLUGIN_API Processor::getState(IBStream* stream){
 tresult PLUGIN_API Processor::setState(IBStream* stream){
     host::Document doc;
     if(!readDocument(stream,doc)||!model_.restore(doc))return kResultFalse;
-    cleanupPending_.store(true,std::memory_order_release);
     return kResultOk;
 }
 tresult PLUGIN_API Processor::process(ProcessData& data){
     if(data.numSamples<0)return kInvalidArgument;
+    host::AutomationPlan automation;
+    bool inputOverflow=false;
     if(data.inputParameterChanges){
         auto* changes=data.inputParameterChanges;
-        for(int32 i=0;i<changes->getParameterCount();++i){
+        const int32 queues=changes->getParameterCount();
+        if(queues<0||queues>64)inputOverflow=true;
+        for(int32 i=0;!inputOverflow&&i<queues;++i){
             auto* q=changes->getParameterData(i);
-            if(!q||q->getPointCount()==0)continue;
-            int32 sample=0;ParamValue value=0.;
-            if(q->getPoint(q->getPointCount()-1,sample,value)==kResultOk &&
-               std::isfinite(value)&&value>=0.&&value<=1.)
-                {
-                  if(q->getParameterId()==TriggerModeId)model_.setMode(value<0.5?live::Mode::Transport:live::Mode::MidiNote);
-                  if(q->getParameterId()==GateId)model_.setGate(std::clamp(static_cast<int>(std::lround(value*100.)),0,100));
-                }
+            if(!q){inputOverflow=true;break;}
+            const auto id=q->getParameterId();
+            if(id!=TriggerModeId&&id!=GateId)continue;
+            const int32 points=q->getPointCount();
+            if(points<0||points>host::AutomationPlan::capacity-automation.count){inputOverflow=true;break;}
+            for(int32 n=0;n<points;++n){
+                int32 offset=0;ParamValue value=0.;
+                if(q->getPoint(n,offset,value)!=kResultOk||
+                   !automation.add(offset,id==GateId,value,data.numSamples)){inputOverflow=true;break;}
+            }
         }
     }
+    automation.sort();
     live::Block block;
     block.samples=data.numSamples;
     block.sampleRate=sampleRate_;
@@ -103,25 +110,28 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
     }
     live::Trigger triggers[live::Runtime::maxTriggers]{};
     int count=0;
-    bool inputOverflow=false;
     if(data.inputEvents){
         const int32 total=data.inputEvents->getEventCount();
-        if(total>live::Runtime::maxTriggers)inputOverflow=true;
+        if(total<0||total>live::Runtime::maxTriggers)inputOverflow=true;
         for(int32 i=0;!inputOverflow&&i<total;++i){
             Steinberg::Vst::Event ev{};
-            if(data.inputEvents->getEvent(i,ev)!=kResultOk)continue;
+            if(data.inputEvents->getEvent(i,ev)!=kResultOk){inputOverflow=true;break;}
             if(ev.type!=Steinberg::Vst::Event::kNoteOnEvent &&
                ev.type!=Steinberg::Vst::Event::kNoteOffEvent)continue;
             const bool on=ev.type==Steinberg::Vst::Event::kNoteOnEvent && ev.noteOn.velocity>0.f;
             const int pitch=ev.type==Steinberg::Vst::Event::kNoteOnEvent?ev.noteOn.pitch:ev.noteOff.pitch;
-            if(ev.sampleOffset<0||ev.sampleOffset>=data.numSamples||pitch<0||pitch>127){
+            const float velocity=ev.type==Steinberg::Vst::Event::kNoteOnEvent?ev.noteOn.velocity:ev.noteOff.velocity;
+            if(ev.sampleOffset<0||ev.sampleOffset>=data.numSamples||pitch<0||pitch>127||
+               !std::isfinite(velocity)||velocity<0.f||velocity>1.f){
                 inputOverflow=true; // Malformed input also requires safe voice cleanup.
                 break;
             }
             triggers[count++]={ev.sampleOffset,pitch,on};
         }
     }
+    int sliceOffset=0;
     auto sink=[&](live::Output e) noexcept -> bool {
+        e.offset+=sliceOffset;
         if(!data.outputEvents || e.offset<0||e.offset>=data.numSamples)return false;
         Steinberg::Vst::Event event{};
         event.busIndex=0;
@@ -144,31 +154,42 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         }
         return data.outputEvents->addEvent(event)==kResultOk;
     };
+    if(!model_.beginBlock())return kResultFalse;
     if(inputOverflow)cleanupPending_.store(true,std::memory_order_release);
     if(cleanupPending_.exchange(false,std::memory_order_acq_rel)){
-        const auto wanted=model_.mode();
-        model_.setMode(live::Mode::Transport);
-        auto stopped=block;
-        stopped.playing=false;stopped.ppqValid=false;
-        if(!model_.process(stopped,nullptr,0,sink)){
-            model_.setMode(wanted);
-            cleanupPending_.store(true,std::memory_order_release);
-            return kResultFalse;
+        if(!model_.stop(sink)){
+            cleanupPending_.store(true,std::memory_order_release);return kResultFalse;
         }
-        model_.setMode(wanted);
     }
-    // Never schedule a fresh note from an oversized/invalid input block.
     if(inputOverflow)return kResultFalse;
-    if(!model_.process(block,triggers,count,sink))return kResultFalse;
-    int step=16; // 16 is "not playing" for this 0..16 read-only parameter.
-    if(model_.mode()==live::Mode::Transport&&block.playing&&block.ppqValid&&block.tempoValid &&
-       std::isfinite(block.projectPpq)&&block.projectPpq>=0.){
-        const auto tick=static_cast<std::int64_t>(std::floor(block.projectPpq*4.));
-        step=static_cast<int>(tick%16);
-    }else if(model_.mode()==live::Mode::MidiNote){
-        const auto current=model_.playheadStep();
-        if(current>=0)step=current;
+    for(int i=1;i<count;++i){auto v=triggers[i];int j=i;
+        while(j>0&&(triggers[j-1].offset>v.offset||
+              (triggers[j-1].offset==v.offset&&triggers[j-1].on&&!v.on))){triggers[j]=triggers[j-1];--j;}
+        triggers[j]=v;
     }
+    int point=0,pos=0;
+    do {
+        while(point<automation.count&&automation.points[static_cast<unsigned>(point)].offset==pos){
+            const auto p=automation.points[static_cast<unsigned>(point++)];
+            const bool applied=p.gate?model_.setGate(static_cast<int>(std::lround(p.value*100.))):
+                model_.setMode(p.value<0.5?live::Mode::Transport:live::Mode::MidiNote);
+            if(!applied){cleanupPending_.store(true,std::memory_order_release);return kResultFalse;}
+        }
+        const int end=point<automation.count?automation.points[static_cast<unsigned>(point)].offset:data.numSamples;
+        live::Trigger sliced[live::Runtime::maxTriggers]{};int selected=0;
+        for(int i=0;i<count;++i)if(triggers[i].offset>=pos&&triggers[i].offset<end){
+            sliced[selected]=triggers[i];sliced[selected++].offset-=pos;
+        }
+        auto part=block;part.samples=end-pos;
+        if(part.ppqValid)part.projectPpq+=pos*part.tempo/(60.*part.sampleRate);
+        sliceOffset=pos;
+        if(!model_.processPrepared(part,sliced,selected,sink)){
+            cleanupPending_.store(true,std::memory_order_release);return kResultFalse;
+        }
+        pos=end;
+    }while(pos<data.numSamples);
+    const int current=model_.playheadStep();
+    const int step=current<0?16:current;
     if(step!=reportedStep_&&data.outputParameterChanges){
         int32 queueIndex=0;
         auto* q=data.outputParameterChanges->addParameterData(PlayheadStepId,queueIndex);
@@ -185,7 +206,12 @@ tresult PLUGIN_API Processor::notify(IMessage* msg){
   int64 gate=-1;
   if(!msg->getAttributes() || msg->getAttributes()->getInt("Gate",gate)!=kResultOk ||
      gate<0 || gate>100)return kResultFalse;
-  model_.setGate(static_cast<int>(gate));return kResultOk;
+  return model_.setGate(static_cast<int>(gate))?kResultOk:kResultFalse;
+ }
+ if(msg&&msg->getMessageID()&&std::strcmp(msg->getMessageID(),"125A_EBM_MODE_V1")==0){
+  int64 mode=-1;
+  if(!msg->getAttributes()||msg->getAttributes()->getInt("Mode",mode)!=kResultOk||mode<0||mode>1)return kResultFalse;
+  return model_.setMode(static_cast<live::Mode>(mode))?kResultOk:kResultFalse;
  }
  if(!msg || !msg->getMessageID() || std::strcmp(msg->getMessageID(),"125A_EBM_FULL_DOCUMENT_V1")!=0)
   return AudioEffect::notify(msg);
@@ -196,7 +222,7 @@ tresult PLUGIN_API Processor::notify(IMessage* msg){
   return kResultFalse;
  host::Document restored;
  if(!host::decode(static_cast<const std::uint8_t*>(data),size,restored) ||
-    !model_.restore(restored)) return kResultFalse;
+    !model_.restore(restored,false)) return kResultFalse;
  return kResultOk;
 }
 
@@ -206,7 +232,7 @@ tresult PLUGIN_API Controller::initialize(FUnknown* context){
  auto* param=new RangeParameter(STR16("Playback Trigger"),TriggerModeId,
                                   STR16(""),0.,1.,0.,1,ParameterInfo::kCanAutomate);
  param->setPrecision(0);parameters.addParameter(param);
- auto* gateParam=new RangeParameter(STR16("Global Gate"),GateId,STR16("%"),0.,100.,100.,0,ParameterInfo::kCanAutomate);
+ auto* gateParam=new RangeParameter(STR16("Global Gate"),GateId,STR16("%"),0.,100.,100.,100,ParameterInfo::kCanAutomate);
  gateParam->setPrecision(0);parameters.addParameter(gateParam);
  auto* playheadParam=new RangeParameter(STR16("Pattern Playhead"),PlayheadStepId,STR16(""),0.,16.,16.,16,ParameterInfo::kIsReadOnly);
  playheadParam->setPrecision(0);parameters.addParameter(playheadParam);
@@ -303,7 +329,7 @@ bool Controller::transact(v2::Session next,live::Mode mode,edit::Pattern pattern
  session_=std::move(next);mode_=mode;editable_=std::move(pattern);
  bar_=std::clamp(bar_,0,editable_.bars-1);
  // Non-parameterized musical edits must mark the host project modified.
- if(auto* handler2=componentHandler2){(void)handler2->setDirty(true);}
+ (void)EditController::setDirty(true);
  status_="PATTERN SENT TO HOST";redraw();return true;
 }
 bool Controller::commitEdit(edit::Pattern pattern){return transact(session_,mode_,std::move(pattern));}
@@ -314,7 +340,10 @@ void Controller::endGateGesture(){
  if(gateGestureOpen_){endEdit(GateId);gateGestureOpen_=false;}
 }
 void Controller::setGateFromPixel(int x){
- const int proposed=ui::gateValue(x);
+ setGateValue(ui::gateValue(x));
+}
+void Controller::setGateValue(int proposed){
+ proposed=std::clamp(proposed,0,100);
  if(proposed==gate_)return;
  // Gate gestures send a tiny atomic-control message, not a full musical
  // document/pattern revision per mouse move. The host parameter is automated.
@@ -334,7 +363,10 @@ void Controller::setGateFromPixel(int x){
  status_="GLOBAL GATE UPDATED";redraw();
 }
 void Controller::setVariationFromPixel(int x){
- const int value=ui::variationValue(x);
+ setVariationValue(ui::variationValue(x));
+}
+void Controller::setVariationValue(int value){
+ value=std::clamp(value,0,100);
  if(value==session_.options().variation)return;
  try{
   auto next=session_;
@@ -352,12 +384,7 @@ void Controller::dragNumeric(int index,int row,int base,int upwardPixels){
  const auto& source=editable_.steps[static_cast<std::size_t>(index)];
  if(!source.on||source.locked)return;
  const ui::Target target=row==2?ui::Target::Velocity:ui::Target::Length;
- int maxValue=128;
- if(row==3){
-  maxValue=editable_.bars*16-index;
-  for(int next=index+1;next<editable_.bars*16;++next)
-   if(editable_.steps[static_cast<std::size_t>(next)].on){maxValue=next-index;break;}
- }
+ const int maxValue=row==3?edit::maximumLength(editable_,index):127;
  const int value=ui::dragValue(target,base,upwardPixels,maxValue);
  if(value==(row==2?source.velocity:source.length))return;
  auto p=editable_;
@@ -412,8 +439,7 @@ void Controller::choice(int x,int y,int kind){
       auto fresh=edit::fromPhrase(v2::render(next.current()),pat.bars,pat.scale,pat.songStartBar);
       if(next.options().style==Style::ClassicEBM)
        (void)edit::generateClassicDrive(fresh,next.options().rootMidi,next.current().settings.seed);
-      for(int i=0;i<edit::kMaxSteps;++i)if(pat.steps[static_cast<std::size_t>(i)].locked)
-          fresh.steps[static_cast<std::size_t>(i)]=pat.steps[static_cast<std::size_t>(i)];
+      edit::preserveLocks(pat,fresh);
       edit::conformToScale(fresh,next.options().rootMidi);
       pat=std::move(fresh);
      }else if(kind==1){
@@ -422,14 +448,8 @@ void Controller::choice(int x,int y,int kind){
       if(!next.hasCurrent())(void)next.generate();
       pat.bars=value;
      }else if(kind==2){
-      const int transpose=value-next.options().rootMidi;
-      bool safe=true;
-       for(const auto& st:pat.steps)if(st.on&&!st.locked)
-        if(static_cast<int>(st.pitch)+transpose<0||static_cast<int>(st.pitch)+transpose>127){safe=false;break;}
-       if(!safe){status_="ROOT OUT OF MIDI RANGE";redraw();return;}
-       next.setRootMidi(value);
-       for(auto& st:pat.steps)if(st.on&&!st.locked)
-        st.pitch=static_cast<std::uint8_t>(static_cast<int>(st.pitch)+transpose);
+      if(!edit::transpose(pat,value-next.options().rootMidi))throw std::out_of_range("ROOT OUT OF MIDI RANGE");
+      else next.setRootMidi(value);
      }else if(kind==3){
       pat.scale=static_cast<edit::Scale>(value);
       edit::conformToScale(pat,next.options().rootMidi);
@@ -447,48 +467,59 @@ void Controller::choice(int x,int y,int kind){
   opened->forget();redraw();
  }))menu->forget();
 }
+bool Controller::wheel(int x,int y,int direction){
+ const auto hit=ui::hit(x,y);
+ if(hit.target==ui::Target::Gate){setGateValue(gate_+direction);return true;}
+ if(hit.target==ui::Target::Variation){setVariationValue(session_.options().variation+direction);return true;}
+ if(hit.target!=ui::Target::Velocity&&hit.target!=ui::Target::Length)return false;
+ const int ix=bar_*16+hit.column;const auto& st=editable_.steps[static_cast<std::size_t>(ix)];
+ if(!st.on||st.locked)return true;
+ const int before=hit.row==2?st.velocity:edit::effectiveLength(editable_,ix);
+ auto pat=editable_;
+ const int value=std::clamp(before+direction,1,hit.row==2?127:edit::maximumLength(pat,ix));
+ if(value!=before&&edit::modify(pat,ix,st.pitch,hit.row==2?value:st.velocity,hit.row==3?value:st.length))
+  (void)commitEdit(std::move(pat));
+ return true;
+}
 void Controller::numericEdit(int index,int row){
- if(!editor_||!editor_->getFrame()||index<0||index>=editable_.bars*16)return;
+ if(!editor_||!editor_->getFrame()||row<2||row>5)return;
+ if(row<4&&(index<0||index>=editable_.bars*16||editable_.steps[static_cast<std::size_t>(index)].locked))return;
  auto* frame=editor_->getFrame();
  if(!textInput_){
   textInput_=new VSTGUI::CTextEdit(VSTGUI::CRect(0,0,49,48),this,9100,"100");
   textInput_->setBackColor(VSTGUI::CColor{30,47,60,255});
   textInput_->setFontColor(VSTGUI::CColor{255,255,255,255});
-  textInput_->setHoriAlign(VSTGUI::kCenterText);
-  frame->addView(textInput_);
+  textInput_->setHoriAlign(VSTGUI::kCenterText);frame->addView(textInput_);
  }
  editIndex_=index;editRow_=row;
- const auto& st=editable_.steps[static_cast<std::size_t>(index)];
- int effectiveLength=std::min<int>(st.length,editable_.bars*16-index);
- if(row==3)for(int next=index+1;next<editable_.bars*16;++next)
-  if(editable_.steps[static_cast<std::size_t>(next)].on){effectiveLength=std::min(effectiveLength,next-index);break;}
- const int value=row==2?st.velocity:effectiveLength;
- const int x=ui::gridX+(index%16)*ui::cellW,y=ui::gridY+row*ui::rowH;
- textInput_->setViewSize(VSTGUI::CRect(x,y,x+49,y+48));
- textInput_->setText(std::to_string(value).c_str());
- textInput_->setVisible(true);
+ int value=0,x=0,y=0,width=49,height=48;
+ if(row==4){value=gate_;x=691;y=493;width=100;height=30;}
+ else if(row==5){value=session_.options().variation;x=628;y=128;width=100;height=24;}
+ else {
+  const auto& st=editable_.steps[static_cast<std::size_t>(index)];
+  value=row==2?st.velocity:edit::effectiveLength(editable_,index);
+  x=ui::gridX+(index%16)*ui::cellW;y=ui::gridY+row*ui::rowH;
+ }
+ textInput_->setViewSize(VSTGUI::CRect(x,y,x+width,y+height));
+ textInput_->setMouseableArea(textInput_->getViewSize());
+ textInput_->setText(std::to_string(value).c_str());textInput_->setVisible(true);
  frame->setFocusView(textInput_);
 }
 void Controller::valueChanged(VSTGUI::CControl* control){
  if(!textInput_||control!=textInput_||editIndex_<0)return;
- try{
-  const std::string input=textInput_->getText().data();
-   std::size_t consumed=0;
-   const int value=std::stoi(input,&consumed);
-   if(consumed!=input.size())throw std::invalid_argument("Invalid numeric suffix");
+ int value=0;
+ const int minimum=editRow_>=4?0:1;
+ const int maximum=editRow_>=4?100:editRow_==2?127:edit::maximumLength(editable_,editIndex_);
+ if(!ui::integer(textInput_->getText().data(),minimum,maximum,value)){
+  status_="ENTER A VALID INTEGER IN RANGE";redraw();return;
+ }
+ if(editRow_==4)setGateValue(value);
+ else if(editRow_==5)setVariationValue(value);
+ else {
   auto pat=editable_;const auto& st=pat.steps[static_cast<std::size_t>(editIndex_)];
-  if(editRow_==2 && value>=1 && value<=127)
-   (void)edit::modify(pat,editIndex_,st.pitch,value,st.length);
-  else if(editRow_==3 && value>=1 && value<=128){
-   int maximum=editable_.bars*16-editIndex_;
-   for(int next=editIndex_+1;next<editable_.bars*16;++next)
-    if(editable_.steps[static_cast<std::size_t>(next)].on){maximum=next-editIndex_;break;}
-   if(value>maximum){status_="LENGTH EXCEEDS NEXT NOTE";redraw();return;}
-   (void)edit::modify(pat,editIndex_,st.pitch,st.velocity,value);
-  }
-  else {status_="ENTER A VALID NUMBER";redraw();return;}
-  (void)commitEdit(std::move(pat));
- }catch(...){status_="INVALID NUMBER";redraw();}
+  if(!edit::modify(pat,editIndex_,st.pitch,editRow_==2?value:st.velocity,editRow_==3?value:st.length)||
+     !commitEdit(std::move(pat)))return;
+ }
  textInput_->setVisible(false);editIndex_=-1;editRow_=-1;
 }
 void Controller::hover(int x,int y){
@@ -497,13 +528,13 @@ void Controller::hover(int x,int y){
  switch(ui::hit(x,y).target){
  case Target::NoteOn:next="NOTE ON: click toggle | SHIFT+click LOCK | CTRL+click reset";break;
  case Target::Pitch:next="PITCH: double-click choose scale note | CTRL+click root";break;
- case Target::Velocity:next="VELOCITY: drag up/down or double-click 1-127 | CTRL+click 100";break;
- case Target::Length:next="LENGTH: 1=1/16, 2=1/8, 4=1/4; drag or double-click steps";break;
- case Target::Gate:next="GLOBAL GATE: shorten every note 0-100% | CTRL+click = 100%";break;
+ case Target::Velocity:next="VELOCITY: drag / wheel +/-1 / double-click 1-127 | CTRL=100";break;
+ case Target::Length:next="LENGTH: 1=1/16 | drag / wheel +/-1 / double-click | CTRL=1";break;
+ case Target::Gate:next="GATE: drag / wheel +/-1 / double-click 0-100 | CTRL = 100%";break;
  case Target::Bars:next="BARS: choose 1 / 2 / 4 / 8";break;
  case Target::Root:next="ROOT: note names follow Studio One (MIDI 60 = C3)";break;
  case Target::Scale:next="SCALE: generated unlocked notes follow the selected scale";break;
- case Target::Variation:next="VARIATION: intensity for next VARIATE; slider leaves notes unchanged";break;
+ case Target::Variation:next="VARIATION: drag / wheel +/-1 / double-click 0-100 | CTRL = 30%";break;
  case Target::SongStart:next="SONG START: DAW bar at which pattern bar 1 starts";break;
  case Target::Copy:next="COPY BAR: store selected 16 steps";break;
  case Target::Paste:next="PASTE BAR: paste into current bar (LOCKED steps protected)";break;
@@ -542,21 +573,15 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
  case Target::Style:if(ctrl){auto next=session_;next.setStyle(Style::ClassicEBM);
    (void)next.generate();auto pat=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
    (void)edit::generateClassicDrive(pat,next.options().rootMidi,next.current().settings.seed);
-    for(int i=0;i<edit::kMaxSteps;++i)if(editable_.steps[static_cast<std::size_t>(i)].locked)
-      pat.steps[static_cast<std::size_t>(i)]=editable_.steps[static_cast<std::size_t>(i)];
+    edit::preserveLocks(editable_,pat);
    edit::conformToScale(pat,next.options().rootMidi);
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,0);break;
  case Target::Bars:if(ctrl){auto next=editable_;next.bars=8;(void)commitEdit(next);}else choice(x,y,1);break;
- case Target::Root:if(ctrl){auto next=session_;const int offset=48-next.options().rootMidi;auto pat=editable_;bool safe=true;
-   for(const auto& s:pat.steps)if(s.on&&!s.locked)
-    if(static_cast<int>(s.pitch)+offset<0||static_cast<int>(s.pitch)+offset>127){safe=false;break;}
-   if(!safe){status_="ROOT RESET OUT OF MIDI RANGE";redraw();break;}
-   next.setRootMidi(48);
-   for(auto& s:pat.steps)if(s.on&&!s.locked)
-    s.pitch=static_cast<std::uint8_t>(static_cast<int>(s.pitch)+offset);
-   (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,2);break;
+ case Target::Root:if(ctrl){auto next=session_;auto pat=editable_;
+   if(!edit::transpose(pat,48-next.options().rootMidi)){status_="ROOT RESET OUT OF MIDI RANGE";redraw();break;}
+   next.setRootMidi(48);(void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,2);break;
  case Target::Scale:if(ctrl){auto p=editable_;p.scale=edit::Scale::Chromatic;(void)commitEdit(p);}else choice(x,y,3);break;
- case Target::Variation:if(ctrl)setVariationFromPixel(628+30*141/100);break;
+ case Target::Variation:if(ctrl)setVariationValue(30);else if(doubleClick)numericEdit(0,5);break;
  case Target::SongStart:if(ctrl){auto p=editable_;p.songStartBar=2;(void)commitEdit(p);}else choice(x,y,4);break;
  case Target::Trigger:{
   const auto desired=ctrl?live::Mode::Transport:(mode_==live::Mode::Transport?live::Mode::MidiNote:live::Mode::Transport);
@@ -577,8 +602,7 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
   auto p=edit::fromPhrase(v2::render(next.current()),editable_.bars,editable_.scale,editable_.songStartBar);
   if(next.options().style==Style::ClassicEBM)
    (void)edit::generateClassicDrive(p,next.options().rootMidi,next.current().settings.seed);
-  for(int i=0;i<edit::kMaxSteps;++i)if(editable_.steps[static_cast<std::size_t>(i)].locked)
-   p.steps[static_cast<std::size_t>(i)]=editable_.steps[static_cast<std::size_t>(i)];
+  edit::preserveLocks(editable_,p);
   edit::conformToScale(p,next.options().rootMidi);
   variationTurn_=0;
   (void)transact(std::move(next),mode_,std::move(p));break;
@@ -614,7 +638,7 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
   for(int j=0;j<16;++j)p.steps[static_cast<std::size_t>(bar_*16+j)]=clipboard_[static_cast<std::size_t>(j)];
   (void)commitEdit(std::move(p));break;
  }
- case Target::Gate:if(ctrl)setGateFromPixel(ui::gateXEnd);else setGateFromPixel(x);break;
+ case Target::Gate:if(ctrl)setGateValue(100);else if(doubleClick)numericEdit(0,4);else setGateFromPixel(x);break;
  case Target::Export:exportMidi();break;
  case Target::NoteOn:{
   auto p=editable_;

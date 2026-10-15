@@ -1,3 +1,6 @@
+> Historical checkpoint. Current repair/QA authority: [Final-QA RC](FINAL-QA-CODEX-RC-2026-10-15.md).
+> Contracts or unverified statuses below describe the named earlier baseline.
+
 # 125A EBM — host-neutral real-time MIDI scheduler (2026-10-14)
 
 **STATUS:** Experimental C++17 MIDI runtime module. NOT a VST3, NOT tested on Windows, NOT a Studio One or musical-approval claim.

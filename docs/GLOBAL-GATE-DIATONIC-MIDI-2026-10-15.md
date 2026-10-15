@@ -1,3 +1,6 @@
+> Historical checkpoint. Current repair/QA authority: [Final-QA RC](FINAL-QA-CODEX-RC-2026-10-15.md).
+> Contracts or unverified statuses below describe the named earlier baseline.
+
 # EBM v0.2 – Global Gate, musical LENGTH display, diatonic MIDI chord roots
 
 Baseline: `5abb13335cffeaca253291bc23a47d85a7f8793a` on `research/v0.2.0-musical-foundation`. This is an experimental update; `main` and the previous Windows package must remain unchanged until owner acceptance.

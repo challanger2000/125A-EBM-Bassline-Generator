@@ -139,7 +139,7 @@ int main(){
   CHECK(live.process(block,&trigger,1,sink));
   CHECK(ons==1 && lastPitch==36 && lastVelocity==77);
   CHECK(ebm::edit::modify(doc.editable,1,39,119,1));
-  CHECK(live.restore(doc));
+  CHECK(live.restore(doc,false)); // GUI edit, not a project-state load.
   CHECK(live.process(block,nullptr,0,sink));
   CHECK(ons>=2 && lastPitch==39 && lastVelocity==119);
   ebm::live::Trigger release{0,48,false};
@@ -165,7 +165,7 @@ int main(){
   CHECK(live.process(block,&start,1,sink));
   CHECK(on==1&&off==0);
   CHECK(ebm::edit::modify(doc.editable,3,40,80,1));
-  CHECK(live.restore(doc));
+  CHECK(live.restore(doc,false)); // GUI edit, not a project-state load.
   CHECK(live.process(block,nullptr,0,sink)); // step 1: old note still held
   CHECK(on==1&&off==0);
   CHECK(live.process(block,nullptr,0,sink)); // step 2: original NoteOff

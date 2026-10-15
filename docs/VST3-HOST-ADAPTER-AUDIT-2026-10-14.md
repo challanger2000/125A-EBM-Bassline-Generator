@@ -1,3 +1,6 @@
+> Historical checkpoint. Current repair/QA authority: [Final-QA RC](FINAL-QA-CODEX-RC-2026-10-15.md).
+> Contracts or unverified statuses below describe the named earlier baseline.
+
 # 125A EBM Bassline Generator — first MIDI-only VST3 adapter, 2026-10-14
 
 **Status:** VST3 **source implemented**, C++17 host-neutral adapter compiled and regressions passed on Linux. Native Windows VST3 module, SDK/Steinberg Validator and Studio One **PENDING** until the single batched Windows job completes. NOT FINAL. No graphical editor implemented.

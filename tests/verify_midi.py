@@ -19,7 +19,7 @@ def variable(data, pos):
     raise ValueError('VLQ too long')
 
 
-def verify(path):
+def verify(path, expected_bars=8, allow_empty=False):
     data = Path(path).read_bytes()
     if data[:4] != b'MThd' or struct.unpack('>I', data[4:8])[0] != 6:
         raise ValueError('invalid MIDI header')
@@ -71,14 +71,21 @@ def verify(path):
             raise ValueError(f'unknown/running status {status:02x}')
     if active or not ended or not found_tempo or not found_meter:
         raise ValueError('missing mandatory MIDI contract')
-    if tick != 8*4*480 or not onsets or any(t >= tick for t in onsets):
-        raise ValueError('wrong eight-bar length')
+    if tick != expected_bars*4*480 or (not onsets and not allow_empty) or any(t >= tick for t in onsets):
+        raise ValueError('wrong bar length or unexpected empty pattern')
     return len(onsets)
 
 
 if __name__ == '__main__':
-    paths = [Path(x) for x in sys.argv[1:]]
-    if not paths:
-        raise SystemExit('Usage: python tests/verify_midi.py preview1.mid [preview2.mid ...]')
-    for file in paths:
-        print(file.name, verify(file), 'note-ons — PASS')
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--bars', type=int, choices=[1, 2, 4, 8], default=8)
+    parser.add_argument('--allow-empty', action='store_true')
+    parser.add_argument('--expected-notes', type=int)
+    parser.add_argument('paths', nargs='+', type=Path)
+    args = parser.parse_args()
+    for file in args.paths:
+        count = verify(file, args.bars, args.allow_empty)
+        if args.expected_notes is not None and count != args.expected_notes:
+            raise ValueError('unexpected note count')
+        print(file.name, count, 'note-ons — PASS')

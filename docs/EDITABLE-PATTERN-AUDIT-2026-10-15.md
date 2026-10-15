@@ -1,3 +1,6 @@
+> Historical checkpoint. Current repair/QA authority: [Final-QA RC](FINAL-QA-CODEX-RC-2026-10-15.md).
+> Contracts or unverified statuses below describe the named earlier baseline.
+
 # Editable EBM MIDI pattern — development checkpoint (2026-10-15)
 
 Branch: `research/v0.2.0-musical-foundation`; **experimental v0.2**, not FULL, no release authorization.

@@ -11,7 +11,7 @@ Branch: `research/v0.2.0-musical-foundation`; source baseline `4be824b29bb535947
 - Variation intensity adjustment no longer overwrites unlocked user-edited MIDI notes. It modifies session intensity for future VARIATE/GENERATE without replacing the editable pattern.
 - Studio One names MIDI 60 C3, so display uses `MIDI/12 - 2` instead of `MIDI/12 - 1`; MIDI pitches are **not** transposed behind the user's back. Old saved notes retain their pitch; their displayed octave name changes. Config root MIDI range remains 24..60, covering C0..C3 in Studio One naming.
 - Existing three scale IDs remain intact for old EBM2 project recall. Seven new scales are appended: Harmonic Minor, Melodic Minor (ascending), Dorian, Phrygian, Mixolydian, Lydian, Minor Pentatonic. All freshly generated, unlocked notes are quantized to the actual selected scale. Locked steps intentionally stay untouched. On loading an old project, existing note pitches are preserved until a user action changes them.
-- Session-derived fallback from older EBM1 project state adopts SONG START BAR 2 as agreed. Explicitly stored song-start values in EBM2 are preserved.
+- Correction to the original checkpoint: older EBM1 sessions retain SONG START BAR 1 in both Controller and Processor. New editable sessions default to BAR 2. Explicit EBM2/EBM3 song-start values are preserved.
 
 ## Local pre-CI proof and open gates
 

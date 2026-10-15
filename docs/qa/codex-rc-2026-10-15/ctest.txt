@@ -1,0 +1,43 @@
+Test project /workspace/build-ebm
+      Start 16: EBM_Editable_MIDI_Pattern
+      Start 19: EBM_Codex_Repair_Contracts
+      Start 11: EBM_Core_Groove_Novelty
+      Start  8: EBM_Generate_Variate_Session
+ 1/19 Test #16: EBM_Editable_MIDI_Pattern ....................   Passed    0.00 sec
+      Start 13: EBM_Live_MIDI_Scheduler
+ 2/19 Test #13: EBM_Live_MIDI_Scheduler ......................   Passed    0.45 sec
+      Start  9: EBM_Repeat_Variate_Alternatives
+ 3/19 Test  #8: EBM_Generate_Variate_Session .................   Passed    0.51 sec
+      Start 12: EBM_OneShot_And_Loop_Seam
+ 4/19 Test #11: EBM_Core_Groove_Novelty ......................   Passed    0.76 sec
+      Start 10: EBM_Independent_Rhythmic_Novelty
+ 5/19 Test #12: EBM_OneShot_And_Loop_Seam ....................   Passed    0.26 sec
+      Start  1: EBM_Composition_Contract
+ 6/19 Test  #9: EBM_Repeat_Variate_Alternatives ..............   Passed    0.41 sec
+      Start 14: EBM_VST3_Host_Bridge_Contract
+ 7/19 Test  #1: EBM_Composition_Contract .....................   Passed    0.12 sec
+      Start  6: EBM_MultiBar_Phrase_Arc
+ 8/19 Test  #6: EBM_MultiBar_Phrase_Arc ......................   Passed    0.04 sec
+      Start  3: EBM_Musical_Cadences
+ 9/19 Test #10: EBM_Independent_Rhythmic_Novelty .............   Passed    0.19 sec
+      Start  5: EBM_Directed_Tonal_Contour
+10/19 Test #14: EBM_VST3_Host_Bridge_Contract ................   Passed    0.08 sec
+      Start  7: EBM_Kick_Answer_Accent_Interlock
+11/19 Test  #3: EBM_Musical_Cadences .........................   Passed    0.02 sec
+      Start  4: EBM_Motif_Lineage
+12/19 Test  #4: EBM_Motif_Lineage ............................   Passed    0.01 sec
+      Start  2: EBM_Grammar_Identities
+13/19 Test  #5: EBM_Directed_Tonal_Contour ...................   Passed    0.03 sec
+      Start 17: EBM_Classic_Drive_And_C2_Default
+14/19 Test  #7: EBM_Kick_Answer_Accent_Interlock .............   Passed    0.03 sec
+      Start 15: EBM_GUI_Control_Policy
+15/19 Test #15: EBM_GUI_Control_Policy .......................   Passed    0.00 sec
+      Start 18: EBM_Global_Gate_And_Diatonic_Chord_Trigger
+16/19 Test  #2: EBM_Grammar_Identities .......................   Passed    0.01 sec
+17/19 Test #17: EBM_Classic_Drive_And_C2_Default .............   Passed    0.01 sec
+18/19 Test #18: EBM_Global_Gate_And_Diatonic_Chord_Trigger ...   Passed    0.00 sec
+19/19 Test #19: EBM_Codex_Repair_Contracts ...................   Passed    1.04 sec
+
+100% tests passed out of 19
+
+Total Test time (real) =   1.04 sec

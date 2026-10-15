@@ -1,3 +1,7 @@
+> HISTORICAL standalone-engine chronology, retained as original evidence.
+> Current candidate and open Windows/DAW gates: [Final-QA RC](FINAL-QA-CODEX-RC-2026-10-15.md).
+> Historical NOT IMPLEMENTED / NOT VERIFIED statements below are checkpoint-specific.
+
 # 125A EBM musical engine v0.2 grammar and phrase-ending correction — 2026-10-13
 
 **Status (2026-10-14): local multi-bar phrase-form technical checks PASS; musical quality still NOT VERIFIED; NOT FINAL.**

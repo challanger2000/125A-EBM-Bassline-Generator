@@ -38,10 +38,10 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseDown(VSTGUI::CPoint& p,const VSTGUI::
  pressed_=hit.target;pressedColumn_=hit.column;
  if(ui::isCommand(hit.target))lastAction_=hit.target;
  invalid();
- if(hit.target==ui::Target::Gate&&!(buttons&VSTGUI::kControl)){
+ if(hit.target==ui::Target::Gate&&!(buttons&(VSTGUI::kControl|VSTGUI::kDoubleClick))){
   draggingGate_=true;owner_->beginGateGesture();owner_->setGateFromPixel(x);return VSTGUI::kMouseEventHandled;
  }
- if(hit.target==ui::Target::Variation&&!(buttons&VSTGUI::kControl)){
+ if(hit.target==ui::Target::Variation&&!(buttons&(VSTGUI::kControl|VSTGUI::kDoubleClick))){
   dragging_=true;owner_->setVariationFromPixel(x);return VSTGUI::kMouseEventHandled;
  }
  if((hit.target==ui::Target::Velocity||hit.target==ui::Target::Length)&&
@@ -50,7 +50,7 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseDown(VSTGUI::CPoint& p,const VSTGUI::
   const auto& note=owner_->pattern().steps[static_cast<std::size_t>(ix)];
   if(note.on&&!note.locked){
    draggingNumeric_=true;dragIndex_=ix;dragRow_=hit.row;dragY_=y;
-   dragBase_=hit.target==ui::Target::Velocity?note.velocity:note.length;
+   dragBase_=hit.target==ui::Target::Velocity?note.velocity:edit::effectiveLength(owner_->pattern(),ix);
    return VSTGUI::kMouseEventHandled;
   }
  }
@@ -84,6 +84,14 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseCancel(){
  if(draggingGate_&&owner_)owner_->endGateGesture();
  draggingGate_=false;dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
  return VSTGUI::kMouseEventHandled;
+}
+void EbmPanel::onMouseWheelEvent(VSTGUI::MouseWheelEvent& event){
+ if(!owner_)return;
+ const auto delta=event.deltaY!=0.?event.deltaY:event.deltaX;
+ if(delta==0.)return;
+ const int x=static_cast<int>(event.mousePosition.x-getViewSize().left);
+ const int y=static_cast<int>(event.mousePosition.y-getViewSize().top);
+ if(owner_->wheel(x,y,delta>0.?1:-1))event.consumed=true;
 }
 void EbmPanel::draw(VSTGUI::CDrawContext* dc){
  using namespace VSTGUI;
@@ -156,11 +164,7 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
     if(r==1)value=pitch(n.pitch);
     if(r==2)value=std::to_string(n.velocity);
     if(r==3){
-      int effective=std::min<int>(n.length,p.bars*16-(current*16+c));
-      for(int next=current*16+c+1;next<p.bars*16;++next){
-       if(p.steps[static_cast<std::size_t>(next)].on){effective=std::min(effective,next-(current*16+c));break;}
-      }
-      value=edit::lengthText(effective);
+      value=edit::lengthText(edit::effectiveLength(p,current*16+c));
      }
     label(dc,value,x,y+12,49,24,foreground,true);
    }else if(r==0&&n.locked)label(dc,"LOCK",x,y+12,49,24,hot,true);

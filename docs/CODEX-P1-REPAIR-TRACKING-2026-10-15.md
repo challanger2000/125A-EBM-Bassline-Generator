@@ -1,3 +1,10 @@
+# Historical P1 repair notes — superseded
+
+The notes below describe the incoming, incompletely verified repair branch.
+The completed implementation and actual results are tracked in
+[Final-QA RC](FINAL-QA-CODEX-RC-2026-10-15.md). The OPEN/NOT TESTED labels below
+are historical and do not describe the current source.
+
 # Codex P1 repair tracking — 2026-10-15
 
 Base binary: `b1d28792eb0da6471698488995b24a8adff5179b`

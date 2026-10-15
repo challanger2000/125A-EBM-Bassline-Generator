@@ -61,6 +61,10 @@ public:
         triggerPhase_=0.;expectedPpq_=0.;haveExpected_=false;
         haveRevision_=false; failedOff_=false; seenMode_=mode_;
     }
+    template<class Sink> bool stop(Sink& sink) noexcept {
+        triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;haveExpected_=false;
+        return release(0,sink);
+    }
     template<class Sink>
     bool process(const Pattern& pattern,const Block& block,
                  const Trigger* triggers,int triggerCount,Sink&& sink) noexcept {
@@ -72,14 +76,12 @@ public:
             (triggerCount>0 && triggers==nullptr) ||
             !pattern.ready || (pattern.bars!=1 && pattern.bars!=2 && pattern.bars!=4 && pattern.bars!=8) ||
             pattern.lengthSteps!=pattern.bars*16) {
-            haveExpected_=false;
-            if (!release(0,sink)) return false;
-            triggerHeld_=false;triggerPitch_=-1;return false;
+            (void)stop(sink);return false;
         }
-        if (failedOff_ && !release(0,sink)) return false;
-        if (block.gatePercent==0 && !release(0,sink)) return false;
+        if (failedOff_ && !release(0,sink)) return cancelInput();
+        if (block.gatePercent==0 && !release(0,sink)) return cancelInput();
         if (mode_!=seenMode_) {
-            if (!release(0,sink)) return false;
+            if (!release(0,sink)) return cancelInput();
             triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;
             haveExpected_=false;seenMode_=mode_;
         }
@@ -88,7 +90,7 @@ public:
             // keep the end step cached when that NoteOn was emitted.
             // A length change invalidates the cached modulo position, so send
             // one safe release without resetting trigger ownership or phase.
-            if (haveRevision_ && seenLength_!=pattern.lengthSteps && !release(0,sink)) return false;
+            if (haveRevision_ && seenLength_!=pattern.lengthSteps && !release(0,sink)) return cancelInput();
             haveRevision_=true;seenRevision_=block.revision;seenLength_=pattern.lengthSteps;
             // In MidiNote mode retain the held trigger and musical phase.
         }
@@ -102,7 +104,7 @@ public:
                 return release(0,sink);
             }
             if (haveExpected_ && std::abs(block.projectPpq-expectedPpq_)>1.e-5) {
-                if (!release(0,sink)) return false; // seek, discontinuity, restart
+                if (!release(0,sink)) return cancelInput(); // seek, discontinuity, restart
             }
             expectedPpq_=block.projectPpq+block.samples*block.tempo/(60.*block.sampleRate);
             haveExpected_=true;
@@ -114,8 +116,7 @@ public:
         for (int i=0;i<triggerCount;++i) {
             const Trigger e=triggers[i];
             if (e.offset<0 || e.offset>=block.samples || e.pitch<0 || e.pitch>127) {
-                if (!release(0,sink)) return false;
-                triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;return false;
+                (void)stop(sink);return false;
             }
             int j=i;
             while (j>0 && (ordered[static_cast<std::size_t>(j-1)].offset>e.offset ||
@@ -129,7 +130,9 @@ public:
         for (int i=0;i<triggerCount;++i) {
             const Trigger e=ordered[static_cast<std::size_t>(i)];
             if (triggerHeld_ && e.offset>pos) {
-                if (!schedule(pattern,block,triggerPhase_,pos,e.offset-pos,rate,sink)) return false;
+                if (!schedule(pattern,block,triggerPhase_,pos,e.offset-pos,rate,sink)) {
+                    triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;return false;
+                }
                 advance(e.offset-pos,rate,pattern.lengthSteps);
             }
             pos=e.offset;
@@ -137,19 +140,19 @@ public:
                 if (triggerHeld_ && triggerPitch_==e.pitch) {
                     // A MIDI chord change commonly sends old NoteOff and new
                     // NoteOn at the same sample. Keep the established phase.
-                    const bool replacement=(i+1<triggerCount &&
-                       ordered[static_cast<std::size_t>(i+1)].on &&
-                       ordered[static_cast<std::size_t>(i+1)].offset==pos);
+                    bool replacement=false;
+                    for(int next=i+1;next<triggerCount&&ordered[static_cast<std::size_t>(next)].offset==pos;++next)
+                        replacement=replacement||ordered[static_cast<std::size_t>(next)].on;
                     if(!replacement){
                         // Input NoteOff owns the stop even when the output bus
                         // temporarily rejects its corresponding bass NoteOff.
                         // The pending output NoteOff is retried next callback.
                         triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;
-                        if (!release(pos,sink)) return false;
+                        if (!release(pos,sink)) return cancelInput();
                     }
                 }
             } else if(!triggerHeld_) {
-                if (!release(pos,sink)) return false;
+                if (!release(pos,sink)) return cancelInput();
                 triggerHeld_=true;triggerPitch_=e.pitch;triggerPhase_=0.;
             } else if(e.pitch!=triggerPitch_) {
                 // New chord root while a trigger is held: RETUNE, never seek.
@@ -157,24 +160,27 @@ public:
                 const int savedBase=activeBasePitch_,savedVel=activeVelocity_;
                 const int savedDuration=activeDuration_;
                 const double savedStart=activeStart_;
-                if (!release(pos,sink))return false;
+                if (!release(pos,sink))return cancelInput();
                 triggerPitch_=e.pitch;
                 if(savedBase>=0 && block.gatePercent>0 &&
                    triggerPhase_ < savedStart+savedDuration*block.gatePercent/100.){
                     const int mapped=harmony::chordPitch(savedBase,block.songRoot,e.pitch,block.scale);
-                    if(!sink(Output{pos,mapped,savedVel,true}))return false;
+                    if(!sink(Output{pos,mapped,savedVel,true}))return cancelInput();
                     activePitch_=mapped;activeBasePitch_=savedBase;
                     activeVelocity_=savedVel;activeDuration_=savedDuration;activeStart_=savedStart;
                 }
             } // Repeated NoteOn for an already held pitch is harmless.
         }
         if (triggerHeld_ && pos<block.samples) {
-            if (!schedule(pattern,block,triggerPhase_,pos,block.samples-pos,rate,sink))return false;
+            if (!schedule(pattern,block,triggerPhase_,pos,block.samples-pos,rate,sink))return cancelInput();
             advance(block.samples-pos,rate,pattern.lengthSteps);
         }
         return true;
     }
 private:
+    bool cancelInput() noexcept {
+        triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;return false;
+    }
     template<class Sink> bool release(int offset,Sink& sink) noexcept {
         if (activePitch_<0) { failedOff_=false;return true; }
         if (!sink(Output{offset,activePitch_,0,false})) { failedOff_=true;return false; }
@@ -194,8 +200,8 @@ private:
                     int offset,int sampleLimit,Sink& sink) noexcept {
         if(activePitch_<0)return true;
         const double end=activeStart_+activeDuration_*block.gatePercent/100.;
-        const int due=std::max(0,static_cast<int>(std::ceil((end-segmentStart)/rate-1.e-8)));
-        if(due<=sampleLimit)return release(offset+due,sink);
+        const double due=std::max(0.,std::ceil((end-segmentStart)/rate-1.e-8));
+        if(due<=sampleLimit)return release(offset+static_cast<int>(due),sink);
         return true;
     }
     template<class Sink>

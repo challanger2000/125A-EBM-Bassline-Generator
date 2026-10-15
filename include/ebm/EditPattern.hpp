@@ -49,6 +49,27 @@ inline bool valid(const Pattern& p) noexcept {
         if(s.pitch>127||s.velocity<1||s.velocity>127||s.length<1||s.length>128)return false;
     return true;
 }
+// Shared GUI/MIDI edit policy. Saved lengths remain intact until explicitly edited.
+inline int maximumLength(const Pattern& p,int step) noexcept {
+    if(step<0||step>=p.bars*16)return 1;
+    for(int next=step+1;next<p.bars*16;++next)
+        if(p.steps[static_cast<std::size_t>(next)].on)return next-step;
+    return p.bars*16-step;
+}
+inline int effectiveLength(const Pattern& p,int step) noexcept {
+    return std::min<int>(p.steps[static_cast<std::size_t>(step)].length,maximumLength(p,step));
+}
+inline bool transpose(Pattern& p,int semitones) noexcept {
+    if(!valid(p)||semitones< -36||semitones>36)return false;
+    for(const auto& st:p.steps)if(st.on&&!st.locked)
+        if(static_cast<int>(st.pitch)+semitones<0||static_cast<int>(st.pitch)+semitones>127)return false;
+    for(auto& st:p.steps)if(st.on&&!st.locked)st.pitch=static_cast<std::uint8_t>(static_cast<int>(st.pitch)+semitones);
+    return true;
+}
+inline void preserveLocks(const Pattern& original,Pattern& replacement) noexcept {
+    for(int i=0;i<kMaxSteps;++i)if(original.steps[static_cast<std::size_t>(i)].locked)
+        replacement.steps[static_cast<std::size_t>(i)]=original.steps[static_cast<std::size_t>(i)];
+}
 inline bool inScale(int midi,int tonic,Scale scale) noexcept {
     if(midi<0||midi>127||static_cast<int>(scale)>=kScaleCount)return false;
     if(scale==Scale::Chromatic)return true;

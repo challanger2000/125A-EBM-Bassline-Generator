@@ -3,26 +3,12 @@ on:
   push:
     branches:
       - research/v0.2.0-musical-foundation
+      - fix/p1-codex-qa-2026-10-15
     paths:
-      - 'src/vst3/**'
+      - 'src/**'
+      - 'include/**'
+      - 'tests/**'
       - 'resource/**'
-      - 'src/HostBridge.cpp'
-      - 'src/Composer.cpp'
-      - 'src/Session.cpp'
-      - 'include/ebm/HostBridge.hpp'
-      - 'include/ebm/EditPattern.hpp'
-      - 'src/LiveMidi.cpp'
-      - 'include/ebm/LiveMidi.hpp'
-      - 'include/ebm/Harmony.hpp'
-      - 'include/ebm/MidiWriter.hpp'
-      - 'src/MidiWriter.cpp'
-      - 'tests/live_midi_tests.cpp'
-      - 'tests/gate_harmony_tests.cpp'
-      - 'tests/edit_pattern_tests.cpp'
-      - 'tests/host_bridge_tests.cpp'
-      - 'tests/vst3_host_probe.cpp'
-      - 'tests/classic_drive_tests.cpp'
-      - 'tests/gui_policy_tests.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-vst3.yml'
   workflow_dispatch:
@@ -34,10 +20,13 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Check complete local source coverage
+        shell: pwsh
+        run: python tests/verify_workflow.py
       - name: Configure Steinberg SDK 3.8.1 Windows x64
         shell: pwsh
         run: cmake -S . -B build-vst3 -G "Visual Studio 17 2022" -A x64 -DEBM_ENABLE_VST3=ON
-      - name: Build experimental GUI VST3 and 18 C++ tests
+      - name: Build experimental GUI VST3 and 19 C++ tests
         shell: pwsh
         run: >-
           cmake --build build-vst3 --config Release --parallel 4 --target
@@ -47,10 +36,28 @@ jobs:
           ebm_rhythmic_novelty_tests ebm_core_novelty_tests
           ebm_loop_boundary_tests ebm_live_midi_tests ebm_host_bridge_tests
           ebm_gui_policy_tests ebm_edit_pattern_tests ebm_classic_drive_tests
-          ebm_gate_harmony_tests
+          ebm_gate_harmony_tests ebm_repair_tests ebm_qa_exports
       - name: Run all Windows core and GUI regressions
         shell: pwsh
-        run: ctest --test-dir build-vst3 -C Release --output-on-failure -j 4
+        run: |
+          New-Item -ItemType Directory -Force qa-logs | Out-Null
+          ctest --test-dir build-vst3 -C Release --no-tests=error --output-on-failure --output-junit "$pwd/qa-logs/ctest.xml" -j 4 2>&1 | Tee-Object qa-logs/ctest.txt
+          if ($LASTEXITCODE -ne 0) { throw 'CTest failed' }
+          & build-vst3/Release/ebm_repair_tests.exe --negative-control 2>&1 | Tee-Object qa-logs/expected-negative-control.txt
+          if ($LASTEXITCODE -ne 1) { throw 'Release negative control did not fail as expected' }
+          $global:LASTEXITCODE = 0
+      - name: Verify twelve independent MIDI exports
+        shell: pwsh
+        run: |
+          & build-vst3/Release/ebm_qa_exports.exe qa-exports
+          if ($LASTEXITCODE -ne 0) { throw 'MIDI export failed' }
+          foreach ($bars in @(1,2,4,8)) {
+            foreach ($gate in @(0,50,100)) {
+              $notes = if ($gate -eq 0) { 0 } else { 2 }
+              python tests/verify_midi.py --bars $bars --allow-empty --expected-notes $notes "qa-exports/bars-$bars-gate-$gate.mid"
+              if ($LASTEXITCODE -ne 0) { throw 'Independent MIDI parse failed' }
+            }
+          }
       - name: Build original Steinberg VST3 Validator
         shell: pwsh
         run: cmake --build build-vst3 --config Release --parallel 4 --target validator
@@ -92,7 +99,7 @@ jobs:
           $exe = Join-Path (Resolve-Path 'build-vst3/Release').Path 'EBMHostProbe.exe'
           if (-not (Test-Path $exe -PathType Leaf)) { throw 'EBMHostProbe.exe missing' }
           $plugin = (Resolve-Path 'stage/125A EBM Bassline Generator.vst3').Path
-          & $exe $plugin
+          & $exe $plugin 2>&1 | Tee-Object qa-logs/native-host.txt
           if ($LASTEXITCODE -ne 0) { throw "Native VST3 host probe failed: $LASTEXITCODE" }
       - name: Steinberg Validator on native GUI bundle
         shell: pwsh
@@ -101,11 +108,37 @@ jobs:
             Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
           if ($null -eq $validator) { throw 'Steinberg validator.exe missing' }
           $plugin = (Resolve-Path 'stage/125A EBM Bassline Generator.vst3').Path
-          & $validator.FullName -e $plugin
+          & $validator.FullName -e $plugin 2>&1 | Tee-Object qa-logs/validator.txt
           if ($LASTEXITCODE -ne 0) { throw "Steinberg Validator failed: $LASTEXITCODE" }
+      - name: Record candidate binary checksums
+        shell: pwsh
+        run: |
+          Copy-Item qa-logs stage/QA -Recurse
+          Copy-Item qa-exports stage/QA/MIDI -Recurse
+          git rev-parse HEAD | Set-Content stage/SOURCE-COMMIT.txt
+          $root = (Resolve-Path stage).Path
+          @(Get-ChildItem stage -Recurse -File) | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+            "$hash  $([IO.Path]::GetRelativePath($root, $_.FullName))" | Add-Content -Path stage/SHA256SUMS.txt
+          }
       - name: Archive experimental GUI plugin (NOT FINAL)
         uses: actions/upload-artifact@v4
         with:
-          name: 125A-EBM-v0.2-EDITABLE-GUI-Windows-x64
+          name: 125A-EBM-v0.2-CODEX-RC-Windows-x64
           path: stage/
           if-no-files-found: error
+      - name: Publish precise QA job summary
+        if: always()
+        shell: pwsh
+        run: |
+          '## v0.2 development RC — NOT FINAL' | Add-Content $env:GITHUB_STEP_SUMMARY
+          'Studio One 8.1.2 and owner-local 125A Tester acceptance remain NOT VERIFIED for this new binary.' | Add-Content $env:GITHUB_STEP_SUMMARY
+          foreach ($log in @('ctest','native-host','validator','expected-negative-control')) {
+            $path = "qa-logs/$log.txt"
+            if (Test-Path $path) {
+              "### $log" | Add-Content $env:GITHUB_STEP_SUMMARY
+              '```text' | Add-Content $env:GITHUB_STEP_SUMMARY
+              Get-Content $path -Tail 65 | Add-Content $env:GITHUB_STEP_SUMMARY
+              '```' | Add-Content $env:GITHUB_STEP_SUMMARY
+            }
+          }
