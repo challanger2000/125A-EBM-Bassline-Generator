@@ -153,7 +153,13 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
     if(r==0)value=n.locked?"LOCK":"ON";
     if(r==1)value=pitch(n.pitch);
     if(r==2)value=std::to_string(n.velocity);
-    if(r==3)value=edit::lengthText(n.length);
+    if(r==3){
+      int effective=std::min<int>(n.length,p.bars*16-(current*16+c));
+      for(int next=current*16+c+1;next<p.bars*16;++next){
+       if(p.steps[static_cast<std::size_t>(next)].on){effective=std::min(effective,next-(current*16+c));break;}
+      }
+      value=edit::lengthText(effective);
+     }
     label(dc,value,x,y+12,49,24,foreground,true);
    }else if(r==0&&n.locked)label(dc,"LOCK",x,y+12,49,24,hot,true);
   }
