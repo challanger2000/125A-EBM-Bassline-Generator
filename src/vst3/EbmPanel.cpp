@@ -103,7 +103,7 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
  fill(dc,10,10,1080,570,card);
  fill(dc,20,18,1060,63,well);
  label(dc,"EBM BASSLINE GENERATOR",230,25,620,35,foreground,true,true);
- label(dc,"V0.2  /  EDITABLE MIDI BASSLINE",230,58,620,17,faint,true);
+ label(dc,"V1.0.0  /  EDITABLE MIDI BASSLINE",230,58,620,17,faint,true);
  fill(dc,974,25,102,35,pressed_==ui::Target::Zoom?hot:accent,hot);
  label(dc,owner_->zoom()>1.25?"ZOOM 150%":"ZOOM 100%",975,32,100,20,foreground,true);
  fill(dc,20,93,1060,82,well);
