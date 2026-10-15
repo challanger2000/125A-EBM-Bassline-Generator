@@ -11,6 +11,10 @@ on:
       - 'include/ebm/EditPattern.hpp'
       - 'src/LiveMidi.cpp'
       - 'include/ebm/LiveMidi.hpp'
+      - 'include/ebm/Harmony.hpp'
+      - 'include/ebm/MidiWriter.hpp'
+      - 'src/MidiWriter.cpp'
+      - 'tests/gate_harmony_tests.cpp'
       - 'tests/edit_pattern_tests.cpp'
       - 'tests/host_bridge_tests.cpp'
       - 'tests/gui_policy_tests.cpp'
@@ -28,7 +32,7 @@ jobs:
       - name: Configure Steinberg SDK 3.8.1 Windows x64
         shell: pwsh
         run: cmake -S . -B build-vst3 -G "Visual Studio 17 2022" -A x64 -DEBM_ENABLE_VST3=ON
-      - name: Build experimental GUI VST3 and 16 C++ tests
+      - name: Build experimental GUI VST3 and 18 C++ tests
         shell: pwsh
         run: >-
           cmake --build build-vst3 --config Release --parallel 4 --target
@@ -38,6 +42,7 @@ jobs:
           ebm_rhythmic_novelty_tests ebm_core_novelty_tests
           ebm_loop_boundary_tests ebm_live_midi_tests ebm_host_bridge_tests
           ebm_gui_policy_tests ebm_edit_pattern_tests ebm_classic_drive_tests
+          ebm_gate_harmony_tests
       - name: Run all Windows core and GUI regressions
         shell: pwsh
         run: ctest --test-dir build-vst3 -C Release --output-on-failure -j 4

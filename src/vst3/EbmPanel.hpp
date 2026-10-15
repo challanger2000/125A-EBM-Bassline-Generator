@@ -13,6 +13,7 @@ public:
  VSTGUI::CMouseEventResult onMouseCancel() override;
 private:
  Controller* owner_{};
+ bool draggingGate_=false;
  bool dragging_{};
  bool draggingNumeric_{};
  int dragIndex_=-1,dragRow_=-1,dragY_=0,dragBase_=0;

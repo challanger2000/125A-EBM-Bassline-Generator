@@ -17,6 +17,7 @@ using namespace Steinberg::Vst;
 static const FUID ProcessorUID(0x125AEB01,0x45424D42,0x4153534C,0x00020001);
 static const FUID ControllerUID(0x125AEB02,0x45424D42,0x4153534C,0x00020001);
 constexpr ParamID TriggerModeId=100;
+constexpr ParamID GateId=102;
 constexpr ParamID PlayheadStepId=101; // read-only host-fed GUI position
 class Processor final:public AudioEffect {
 public:
@@ -62,12 +63,14 @@ public:
  const char* help() const noexcept {return help_;}
  int playhead() const noexcept {return playhead_;}
  void setVariationFromPixel(int x);
+ void setGateFromPixel(int x);
+ int gate() const noexcept {return gate_;}
  void dragNumeric(int index,int row,int startingValue,int upwardPixels);
 private:
  bool transact(v2::Session next,live::Mode mode,edit::Pattern pattern);
  bool commitEdit(edit::Pattern pattern);
  void numericEdit(int index,int row);
- bool deliver(const v2::Session& next,live::Mode mode,const edit::Pattern& pattern);
+ bool deliver(const v2::Session& next,live::Mode mode,const edit::Pattern& pattern,int gate);
  void choice(int x,int y,int kind);
  void exportMidi();
  void redraw();
@@ -83,6 +86,7 @@ private:
  EbmPanel* panel_{};
  int bar_{0};
  int variationTurn_{0};
+ int gate_{100};
  int playhead_{16};
  double zoom_{1.0};
  const char* status_{"READY"};

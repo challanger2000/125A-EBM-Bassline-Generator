@@ -7,12 +7,12 @@ using namespace ebm;
 #define CHECK(x) do {if(!(x)){std::cerr<<__LINE__<<": " #x "\n";return 1;}}while(false)
 int main(){
  using namespace ebm::vst3::ui;
- constexpr std::array<Target,17> targets{
+ constexpr std::array<Target,18> targets{
   Target::Zoom,Target::Style,Target::Bars,Target::Root,Target::Scale,
   Target::Variation,Target::SongStart,Target::Trigger,Target::PrevBar,Target::NextBar,
-  Target::Bar,Target::Generate,Target::Variate,Target::Clear,Target::Copy,Target::Paste,Target::Export};
- constexpr std::array<int,17> xs{1025,45,225,345,500,700,835,975,49,180,560,151,273,385,480,598,820};
- constexpr std::array<int,17> ys{40,131,131,131,131,131,131,131,228,228,200,520,520,520,520,520,520};
+  Target::Bar,Target::Generate,Target::Variate,Target::Clear,Target::Copy,Target::Paste,Target::Gate,Target::Export};
+ constexpr std::array<int,18> xs{1025,45,225,345,500,700,835,975,49,180,560,151,273,385,480,598,750,970};
+ constexpr std::array<int,18> ys{40,131,131,131,131,131,131,131,228,228,200,520,520,520,520,520,520,520};
  for(std::size_t i=0;i<targets.size();++i)CHECK(hit(xs[i],ys[i]).target==targets[i]);
  for(const Target t:{Target::Generate,Target::Variate,Target::Clear,
                      Target::Copy,Target::Paste,Target::Export})CHECK(isCommand(t));

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <string>
 
 namespace ebm::edit {
 constexpr int kMaxBars=8, kStepsPerBar=16, kMaxSteps=kMaxBars*kStepsPerBar;
@@ -73,6 +74,17 @@ inline int nearestPitch(int midi,int tonic,Scale scale) noexcept {
         if(midi-distance>=0&&inScale(midi-distance,tonic,scale))return midi-distance;
     }
     return midi;
+}
+inline std::string lengthText(int steps){
+    if(steps>0&&steps%16==0)return std::to_string(steps/16)+" BAR";
+    if(steps==1)return "1/16";
+    if(steps==2)return "1/8";
+    if(steps==3)return "3/16";
+    if(steps==4)return "1/4";
+    if(steps==6)return "3/8";
+    if(steps==8)return "1/2";
+    if(steps==12)return "3/4";
+    return std::to_string(steps)+"/16";
 }
 // Deliberate monophonic policy: a new NoteOn truncates the previous gate;
 // every NoteOff is inside the selected exact export length.

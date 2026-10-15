@@ -3,7 +3,7 @@
 namespace ebm::vst3::ui {
 constexpr int width=1100,height=590,gridX=206,gridY=250,cellW=51,rowH=51;
 enum class Target {None,Style,Bars,Root,Scale,Variation,SongStart,Trigger,Zoom,
-                    PrevBar,NextBar,Bar,Generate,Variate,Clear,Copy,Paste,Export,
+                    PrevBar,NextBar,Bar,Generate,Variate,Clear,Copy,Paste,Gate,Export,
                     NoteOn,Pitch,Velocity,Length};
 struct Hit{Target target=Target::None;int column=-1;int row=-1;};
 constexpr bool inside(int x,int y,int l,int t,int w,int h) noexcept {
@@ -31,7 +31,8 @@ constexpr Hit hit(int x,int y) noexcept {
  if(inside(x,y,351,492,90,53))return {Target::Clear};
  if(inside(x,y,447,492,110,53))return {Target::Copy};
  if(inside(x,y,563,492,110,53))return {Target::Paste};
- if(inside(x,y,679,492,397,53))return {Target::Export};
+ if(inside(x,y,679,492,171,53))return {Target::Gate};
+ if(inside(x,y,856,492,220,53))return {Target::Export};
  return {};
 }
 constexpr bool isCommand(Target t) noexcept {
@@ -43,6 +44,8 @@ constexpr int dragValue(Target target,int base,int upwardPixels,int maxLength=12
  if(target==Target::Length)return std::clamp(base+upwardPixels/4,1,maxLength);
  return base;
 }
+constexpr int gateXStart=691,gateXEnd=836;
+constexpr int gateValue(int x) noexcept {return ((std::clamp(x,gateXStart,gateXEnd)-gateXStart)*100+72)/(gateXEnd-gateXStart);}
 constexpr int variationValue(int x) noexcept {return ((std::clamp(x,628,769)-628)*100+70)/141;}
 constexpr int defaultValue(Target t) noexcept {
  if(t==Target::Bars)return 8;

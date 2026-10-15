@@ -124,7 +124,7 @@ int main(){
   CHECK(ebm::edit::modify(doc.editable,0,36,77,1));
   CHECK(live.restore(doc));
   ebm::live::Block block{};block.samples=6000;block.sampleRate=48000;block.tempo=120;
-  const ebm::live::Trigger trigger{0,60,true};
+  const ebm::live::Trigger trigger{0,48,true};
   int ons=0,offs=0;int lastPitch=-1;int lastVelocity=0;
   auto sink=[&](ebm::live::Output out) noexcept {
     if(out.on){++ons;lastPitch=out.pitch;lastVelocity=out.velocity;}
@@ -137,7 +137,7 @@ int main(){
   CHECK(live.restore(doc));
   CHECK(live.process(block,nullptr,0,sink));
   CHECK(ons>=2 && lastPitch==39 && lastVelocity==119);
-  ebm::live::Trigger release{0,60,false};
+  ebm::live::Trigger release{0,48,false};
   CHECK(live.process(block,&release,1,sink));
   CHECK(ons==offs);
  }
@@ -152,7 +152,7 @@ int main(){
   CHECK(ebm::edit::modify(doc.editable,0,36,100,2));
   CHECK(live.restore(doc));
   ebm::live::Block block{};block.samples=6000;block.sampleRate=48000;block.tempo=120;
-  const ebm::live::Trigger start{0,62,true};
+  const ebm::live::Trigger start{0,48,true};
   int on=0,off=0;
   auto sink=[&](ebm::live::Output e)noexcept -> bool {
    if(e.on)++on;else ++off;return true;
@@ -167,7 +167,7 @@ int main(){
   CHECK(on==1&&off==1);
   CHECK(live.process(block,nullptr,0,sink)); // step 3: edited note
   CHECK(on==2&&off==1);
-  const ebm::live::Trigger stop{0,62,false};
+  const ebm::live::Trigger stop{0,48,false};
   CHECK(live.process(block,&stop,1,sink));
   CHECK(on==off);
  }

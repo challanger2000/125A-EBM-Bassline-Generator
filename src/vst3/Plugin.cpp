@@ -26,8 +26,8 @@ bool readDocument(IBStream* stream,host::Document& document) noexcept {
     host::DocumentBytes bytes{};
     int32 count=0;
     if(stream->read(bytes.data(),8,&count)!=kResultOk || count!=8)return false;
-    const bool old=bytes[3]=='1'&&bytes[4]==1;
-    const auto size=old?host::kLegacyDocumentBytes:host::kDocumentBytes;
+    const auto size=bytes[3]=='1'?host::kLegacyDocumentBytes:
+                    bytes[3]=='2'?host::kV2DocumentBytes:host::kDocumentBytes;
     if(stream->read(bytes.data()+8,static_cast<int32>(size-8),&count)!=kResultOk ||
        count!=static_cast<int32>(size-8))return false;
     return host::decode(bytes.data(),size,document);
@@ -80,11 +80,14 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         auto* changes=data.inputParameterChanges;
         for(int32 i=0;i<changes->getParameterCount();++i){
             auto* q=changes->getParameterData(i);
-            if(!q||q->getParameterId()!=TriggerModeId||q->getPointCount()==0)continue;
+            if(!q||q->getPointCount()==0)continue;
             int32 sample=0;ParamValue value=0.;
             if(q->getPoint(q->getPointCount()-1,sample,value)==kResultOk &&
                std::isfinite(value)&&value>=0.&&value<=1.)
-                model_.setMode(value<0.5?live::Mode::Transport:live::Mode::MidiNote);
+                {
+                  if(q->getParameterId()==TriggerModeId)model_.setMode(value<0.5?live::Mode::Transport:live::Mode::MidiNote);
+                  if(q->getParameterId()==GateId)model_.setGate(std::clamp(static_cast<int>(std::lround(value*100.)),0,100));
+                }
         }
     }
     live::Block block;
@@ -171,6 +174,12 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
 }
 
 tresult PLUGIN_API Processor::notify(IMessage* msg){
+ if(msg && msg->getMessageID() && std::strcmp(msg->getMessageID(),"125A_EBM_GATE_V1")==0){
+  int64 gate=-1;
+  if(!msg->getAttributes() || msg->getAttributes()->getInt("Gate",gate)!=kResultOk ||
+     gate<0 || gate>100)return kResultFalse;
+  model_.setGate(static_cast<int>(gate));return kResultOk;
+ }
  if(!msg || !msg->getMessageID() || std::strcmp(msg->getMessageID(),"125A_EBM_FULL_DOCUMENT_V1")!=0)
   return AudioEffect::notify(msg);
  const void* data=nullptr;
@@ -190,6 +199,8 @@ tresult PLUGIN_API Controller::initialize(FUnknown* context){
  auto* param=new RangeParameter(STR16("Playback Trigger"),TriggerModeId,
                                   STR16(""),0.,1.,0.,1,ParameterInfo::kCanAutomate);
  param->setPrecision(0);parameters.addParameter(param);
+ auto* gateParam=new RangeParameter(STR16("Global Gate"),GateId,STR16("%"),0.,100.,100.,0,ParameterInfo::kCanAutomate);
+ gateParam->setPrecision(0);parameters.addParameter(gateParam);
  (void)session_.generate();
  editable_=edit::fromPhrase(v2::render(session_.current()),8,edit::Scale::Chromatic,2);
  return kResultOk;
@@ -203,9 +214,10 @@ tresult PLUGIN_API Controller::setComponentState(IBStream* stream){
             edit::fromPhrase(next.hasCurrent()?v2::render(next.current()):Phrase{next.options().bars,{}},
                              next.options().bars,edit::Scale::Chromatic,2);
   if(!edit::valid(pat))return kResultFalse;
-  session_=std::move(next);editable_=pat;mode_=doc.mode;
+  session_=std::move(next);editable_=pat;mode_=doc.mode;gate_=doc.gatePercent;
   bar_=std::clamp(bar_,0,editable_.bars-1);
   EditController::setParamNormalized(TriggerModeId,mode_==live::Mode::Transport?0.:1.);
+  EditController::setParamNormalized(GateId,gate_/100.);
   redraw();return kResultOk;
  }catch(...){return kResultFalse;}
 }
@@ -229,6 +241,9 @@ tresult PLUGIN_API Controller::setParamNormalized(ParamID id,ParamValue v){
  const auto result=EditController::setParamNormalized(id,v);
  if(result==kResultOk&&id==PlayheadStepId&&std::isfinite(v)){
   playhead_=std::clamp(static_cast<int>(std::floor(v*16.+0.5)),0,16);redraw();
+ }
+ if(result==kResultOk&&id==GateId&&std::isfinite(v)){
+  gate_=std::clamp(static_cast<int>(std::lround(v*100.)),0,100);redraw();
  }
  if(result==kResultOk&&id==TriggerModeId&&std::isfinite(v)){
   mode_=v<0.5?live::Mode::Transport:live::Mode::MidiNote;
@@ -256,8 +271,8 @@ void Controller::willClose(VSTGUI::VST3Editor* closed){
  if(editor_==closed){editor_=nullptr;panel_=nullptr;textInput_=nullptr;editIndex_=-1;editRow_=-1;}
 }
 void Controller::redraw(){if(panel_)panel_->invalid();}
-bool Controller::deliver(const v2::Session& next,live::Mode mode,const edit::Pattern& pattern){
- host::Document doc{next.snapshot(),mode,pattern};
+bool Controller::deliver(const v2::Session& next,live::Mode mode,const edit::Pattern& pattern,int gate){
+ host::Document doc{next.snapshot(),mode,pattern,gate};
  host::DocumentBytes bytes{};
  if(!host::encode(doc,bytes))return false;
  auto* message=allocateMessage();if(!message)return false;
@@ -269,7 +284,7 @@ bool Controller::deliver(const v2::Session& next,live::Mode mode,const edit::Pat
  const bool sent=sendMessage(message)==kResultOk;message->release();return sent;
 }
 bool Controller::transact(v2::Session next,live::Mode mode,edit::Pattern pattern){
- if(!edit::valid(pattern)||!deliver(next,mode,pattern)){
+ if(!edit::valid(pattern)||!deliver(next,mode,pattern,gate_)){
   status_="HOST UPDATE FAILED";redraw();return false;
  }
  session_=std::move(next);mode_=mode;editable_=std::move(pattern);
@@ -277,6 +292,26 @@ bool Controller::transact(v2::Session next,live::Mode mode,edit::Pattern pattern
  status_="PATTERN SENT TO HOST";redraw();return true;
 }
 bool Controller::commitEdit(edit::Pattern pattern){return transact(session_,mode_,std::move(pattern));}
+void Controller::setGateFromPixel(int x){
+ const int proposed=ui::gateValue(x);
+ if(proposed==gate_)return;
+ // Gate gestures send a tiny atomic-control message, not a full musical
+ // document/pattern revision per mouse move. The host parameter is automated.
+ auto* msg=allocateMessage();
+ if(!msg){status_="GATE UPDATE FAILED";redraw();return;}
+ msg->setMessageID("125A_EBM_GATE_V1");
+ const bool ready=msg->getAttributes() &&
+   msg->getAttributes()->setInt("Gate",proposed)==kResultOk;
+ const bool sent=ready && sendMessage(msg)==kResultOk;
+ msg->release();
+ if(!sent){status_="GATE UPDATE FAILED";redraw();return;}
+ gate_=proposed;
+ beginEdit(GateId);
+ EditController::setParamNormalized(GateId,gate_/100.);
+ performEdit(GateId,gate_/100.);
+ endEdit(GateId);
+ status_="GLOBAL GATE UPDATED";redraw();
+}
 void Controller::setVariationFromPixel(int x){
  const int value=ui::variationValue(x);
  if(value==session_.options().variation)return;
@@ -427,7 +462,8 @@ void Controller::hover(int x,int y){
  case Target::NoteOn:next="NOTE ON: click toggle | SHIFT+click LOCK | CTRL+click reset";break;
  case Target::Pitch:next="PITCH: double-click choose scale note | CTRL+click root";break;
  case Target::Velocity:next="VELOCITY: drag up/down or double-click 1-127 | CTRL+click 100";break;
- case Target::Length:next="LENGTH: drag up/down or double-click steps | CTRL+click 1";break;
+ case Target::Length:next="LENGTH: 1=1/16, 2=1/8, 4=1/4; drag or double-click steps";break;
+ case Target::Gate:next="GLOBAL GATE: shorten every note 0-100% | CTRL+click = 100%";break;
  case Target::Bars:next="BARS: choose 1 / 2 / 4 / 8";break;
  case Target::Root:next="ROOT: note names follow Studio One (MIDI 60 = C3)";break;
  case Target::Scale:next="SCALE: generated unlocked notes follow the selected scale";break;
@@ -451,7 +487,7 @@ void Controller::exportMidi(){
  if(chooser->runModal()&&chooser->getNumSelectedFiles()>0){
   try{
    const auto* path=chooser->getSelectedFile(0);
-   const auto bytes=toMidi(edit::toPhrase(editable_));
+   const auto bytes=toMidi(edit::toPhrase(editable_),gate_);
    if(!path||bytes.empty())status_="MIDI EXPORT FAILED";
    else{
     std::ofstream out(std::filesystem::u8path(path),std::ios::binary|std::ios::trunc);
@@ -482,7 +518,7 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
  case Target::SongStart:if(ctrl){auto p=editable_;p.songStartBar=2;(void)commitEdit(p);}else choice(x,y,4);break;
  case Target::Trigger:{
   const auto desired=ctrl?live::Mode::Transport:(mode_==live::Mode::Transport?live::Mode::MidiNote:live::Mode::Transport);
-  if(deliver(session_,desired,editable_)){
+  if(deliver(session_,desired,editable_,gate_)){
    beginEdit(TriggerModeId);
    EditController::setParamNormalized(TriggerModeId,desired==live::Mode::MidiNote?1.:0.);
    performEdit(TriggerModeId,desired==live::Mode::MidiNote?1.:0.);
@@ -536,6 +572,7 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
   for(int j=0;j<16;++j)p.steps[static_cast<std::size_t>(bar_*16+j)]=clipboard_[static_cast<std::size_t>(j)];
   (void)commitEdit(std::move(p));break;
  }
+ case Target::Gate:if(ctrl)setGateFromPixel(ui::gateXEnd);else setGateFromPixel(x);break;
  case Target::Export:exportMidi();break;
  case Target::NoteOn:{
   auto p=editable_;

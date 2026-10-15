@@ -38,7 +38,7 @@ Config loadConfig(const std::uint8_t* b,std::size_t& i) noexcept {
 }
 bool validModel(const Document& d) {
     if(d.mode!=live::Mode::Transport && d.mode!=live::Mode::MidiNote)return false;
-    if(!edit::valid(d.editable))return false;
+    if(!edit::valid(d.editable) || d.gatePercent<0 || d.gatePercent>100)return false;
     v2::Session tmp;
     tmp.restore(d.session); // Full semantic and lineage consistency.
     return true;
@@ -50,8 +50,8 @@ bool encode(const Document& source,DocumentBytes& target) noexcept {
         if(source.session.history.size()>kMaximumHistory || !validModel(source))return false;
         DocumentBytes fresh{};
         std::size_t i=0;
-        for(char c: {'E','B','M','2'})put8(fresh,i,static_cast<std::uint8_t>(c));
-        put32(fresh,i,2);
+        for(char c: {'E','B','M','3'})put8(fresh,i,static_cast<std::uint8_t>(c));
+        put32(fresh,i,3);
         storeConfig(fresh,i,source.session.options);
         put8(fresh,i,source.session.hasCurrent?1:0);
         storeConfig(fresh,i,source.session.hasCurrent?source.session.current:Config{});
@@ -71,19 +71,22 @@ bool encode(const Document& source,DocumentBytes& target) noexcept {
             put8(fresh,i,step.velocity);put8(fresh,i,step.length);
             put8(fresh,i,step.locked?1:0);
         }
+        put8(fresh,i,static_cast<std::uint8_t>(source.gatePercent));
         put32(fresh,i,checksum(fresh.data(),kDocumentBytes-4));
         if(i!=kDocumentBytes)return false;
         target=fresh;return true;
     }catch(...) {return false;}
 }
 bool decode(const std::uint8_t* bytes,std::size_t count,Document& dest) noexcept {
-    if(!bytes || (count!=kDocumentBytes && count!=kLegacyDocumentBytes))return false;
+    if(!bytes || (count!=kDocumentBytes && count!=kV2DocumentBytes && count!=kLegacyDocumentBytes))return false;
     try {
         std::size_t i=0;
         if(get8(bytes,i)!='E'||get8(bytes,i)!='B'||get8(bytes,i)!='M')return false;
         const auto magic=get8(bytes,i);const auto version=get32(bytes,i);
         const bool legacy=magic=='1'&&version==1&&count==kLegacyDocumentBytes;
-        if(!legacy && !(magic=='2'&&version==2&&count==kDocumentBytes))return false;
+        const bool v2=magic=='2'&&version==2&&count==kV2DocumentBytes;
+        const bool v3=magic=='3'&&version==3&&count==kDocumentBytes;
+        if(!legacy && !v2 && !v3)return false;
         Document candidate{};
         candidate.session.version=2;
         candidate.session.options=loadConfig(bytes,i);
@@ -116,6 +119,7 @@ bool decode(const std::uint8_t* bytes,std::size_t count,Document& dest) noexcept
                 step.length=length;step.locked=locked!=0;
             }
         }
+        if(v3)candidate.gatePercent=get8(bytes,i);
         if(get32(bytes,i)!=checksum(bytes,count-4) || i!=count)return false;
         if(!candidate.session.hasCurrent) {
             // Canonical no-current fields were all 0 except Config defaults.
@@ -190,6 +194,9 @@ bool Model::restore(const Document& doc) {
         if(!live::prepare(phrase,compiled) || !patterns_.publish(compiled))return false;
         session_=std::move(next);
         editable_=doc.editable;
+        gate_.store(doc.gatePercent,std::memory_order_release);
+        root_.store(doc.session.options.rootMidi,std::memory_order_release);
+        scale_.store(static_cast<int>(doc.editable.scale),std::memory_order_release);
         songStart_.store(doc.editable.enabled?doc.editable.songStartBar:1,
                          std::memory_order_release);
         mode_.store(doc.mode,std::memory_order_release);
@@ -198,7 +205,7 @@ bool Model::restore(const Document& doc) {
 }
 Document Model::snapshot() const {
     std::lock_guard<std::mutex> guard(documentMutex_);
-    return Document{session_.snapshot(),mode_.load(std::memory_order_acquire),editable_};
+    return Document{session_.snapshot(),mode_.load(std::memory_order_acquire),editable_,gate_.load(std::memory_order_acquire)};
 }
 bool Model::generate(){
     std::lock_guard<std::mutex> guard(documentMutex_);

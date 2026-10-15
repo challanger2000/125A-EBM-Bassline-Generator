@@ -15,10 +15,12 @@ struct Document {
     v2::SessionState session;
     live::Mode mode=live::Mode::Transport;
     edit::Pattern editable{};
+    int gatePercent=100; // version 3; 100 = original LENGTH
 };
 constexpr std::size_t kMaximumHistory=48;
 constexpr std::size_t kLegacyDocumentBytes=8+12+1+12+1+1+1+12*kMaximumHistory+4;
-constexpr std::size_t kDocumentBytes=kLegacyDocumentBytes+5+edit::kMaxSteps*5;
+constexpr std::size_t kV2DocumentBytes=kLegacyDocumentBytes+5+edit::kMaxSteps*5;
+constexpr std::size_t kDocumentBytes=kV2DocumentBytes+1;
 using DocumentBytes=std::array<std::uint8_t,kDocumentBytes>;
 bool encode(const Document& source,DocumentBytes& target) noexcept;
 bool decode(const std::uint8_t* bytes,std::size_t count,Document& destination) noexcept;
@@ -61,6 +63,8 @@ public:
     bool nextVariant();
     void setMode(live::Mode mode) noexcept;
     live::Mode mode() const noexcept;
+    void setGate(int value) noexcept {gate_.store(value,std::memory_order_release);}
+    int gate() const noexcept {return gate_.load(std::memory_order_acquire);}
     int songStartBar() const noexcept {return songStart_.load(std::memory_order_acquire);}
     int playheadStep() const noexcept {return runtime_.playheadStep();}
     void resetRuntime() noexcept; // only after output bus disconnect
@@ -70,6 +74,9 @@ public:
         const auto* pattern=patterns_.acquire(rev);
         if(!pattern)return false;
         block.revision=rev;
+        block.gatePercent=gate_.load(std::memory_order_acquire);
+        block.songRoot=root_.load(std::memory_order_acquire);
+        block.scale=static_cast<edit::Scale>(scale_.load(std::memory_order_acquire));
         runtime_.setMode(mode());
         return runtime_.process(*pattern,block,triggers,count,sink);
     }
@@ -79,6 +86,7 @@ private:
     v2::Session session_{};
     edit::Pattern editable_{};
     std::atomic<int> songStart_{1};
+    std::atomic<int> gate_{100},root_{48},scale_{0};
     std::atomic<live::Mode> mode_{live::Mode::Transport};
     PatternExchange patterns_{};
     live::Runtime runtime_{};

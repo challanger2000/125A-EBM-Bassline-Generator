@@ -103,7 +103,7 @@ int main(){
     Runtime midi;
     midi.setMode(Mode::MidiNote);
     Sink out;out.origin=0;
-    Block b;b.samples=160;b.sampleRate=160.;b.tempo=120.;b.revision=1;
+    Block b;b.samples=160;b.sampleRate=160.;b.tempo=120.;b.revision=1;b.songRoot=65;
     const Trigger events[]={{7,65,true},{55,64,false},{108,65,false}};
     CHECK(midi.process(p,b,events,3,out));
     CHECK(out.count>=3);
@@ -123,7 +123,7 @@ int main(){
     Runtime live;
     live.setMode(Mode::MidiNote);
     Sink edits;
-    Block liveBlock;liveBlock.samples=30;liveBlock.sampleRate=1000.;liveBlock.tempo=120.;liveBlock.revision=10;
+    Block liveBlock;liveBlock.samples=30;liveBlock.sampleRate=1000.;liveBlock.tempo=120.;liveBlock.revision=10;liveBlock.songRoot=60;
     const Trigger start[]={{0,60,true}};
     CHECK(live.process(p,liveBlock,start,1,edits));
     CHECK(live.triggerHeld() && live.activePitch()==36);

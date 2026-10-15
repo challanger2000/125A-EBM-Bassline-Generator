@@ -1,5 +1,5 @@
 #pragma once
-#include "ebm/Engine.hpp"
+#include "ebm/Harmony.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -39,6 +39,9 @@ struct Block {
     bool tempoValid=false;
     // Bump when replacing a prepared pattern. Keep same revision for read-only blocks.
     std::uint64_t revision=0;
+    int gatePercent=100;
+    int songRoot=48;
+    edit::Scale scale=edit::Scale::Chromatic;
 };
 
 // No allocations, locks, I/O or exceptions in process(). Sink must also be
@@ -54,7 +57,7 @@ public:
     int playheadStep() const noexcept {return triggerHeld_?static_cast<int>(std::floor(triggerPhase_))%16:-1;}
     // reset() ONLY after output disconnection/deactivation, not for live edits.
     void reset() noexcept {
-        activePitch_=-1; activeOffStep_=-1;triggerHeld_=false; triggerPitch_=-1;
+        activePitch_=-1; activeBasePitch_=-1;activeDuration_=0;triggerHeld_=false; triggerPitch_=-1;
         triggerPhase_=0.;expectedPpq_=0.;haveExpected_=false;
         haveRevision_=false; failedOff_=false; seenMode_=mode_;
     }
@@ -64,6 +67,8 @@ public:
         if (block.samples<0 || !std::isfinite(block.sampleRate) || block.sampleRate<=0. ||
             !std::isfinite(block.tempo) || block.tempo<=0. || block.tempo>1000. ||
             triggerCount<0 || triggerCount>maxTriggers ||
+            block.gatePercent<0 || block.gatePercent>100 || block.songRoot<0 || block.songRoot>127 ||
+            static_cast<int>(block.scale)<0 || static_cast<int>(block.scale)>=edit::kScaleCount ||
             (triggerCount>0 && triggers==nullptr) ||
             !pattern.ready || (pattern.bars!=1 && pattern.bars!=2 && pattern.bars!=4 && pattern.bars!=8) ||
             pattern.lengthSteps!=pattern.bars*16) {
@@ -72,6 +77,7 @@ public:
             triggerHeld_=false;triggerPitch_=-1;return false;
         }
         if (failedOff_ && !release(0,sink)) return false;
+        if (block.gatePercent==0 && !release(0,sink)) return false;
         if (mode_!=seenMode_) {
             if (!release(0,sink)) return false;
             triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;
@@ -100,7 +106,7 @@ public:
             }
             expectedPpq_=block.projectPpq+block.samples*block.tempo/(60.*block.sampleRate);
             haveExpected_=true;
-            return schedule(pattern,block.projectPpq*4.,0,block.samples,rate,sink);
+            return schedule(pattern,block,block.projectPpq*4.,0,block.samples,rate,sink);
         }
         haveExpected_=false;
         if (triggerCount>0 && block.samples==0) return false;
@@ -123,22 +129,44 @@ public:
         for (int i=0;i<triggerCount;++i) {
             const Trigger e=ordered[static_cast<std::size_t>(i)];
             if (triggerHeld_ && e.offset>pos) {
-                if (!schedule(pattern,triggerPhase_,pos,e.offset-pos,rate,sink)) return false;
+                if (!schedule(pattern,block,triggerPhase_,pos,e.offset-pos,rate,sink)) return false;
                 advance(e.offset-pos,rate,pattern.lengthSteps);
             }
             pos=e.offset;
             if (!e.on) {
                 if (triggerHeld_ && triggerPitch_==e.pitch) {
-                    if (!release(pos,sink)) return false;
-                    triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;
+                    // A MIDI chord change commonly sends old NoteOff and new
+                    // NoteOn at the same sample. Keep the established phase.
+                    const bool replacement=(i+1<triggerCount &&
+                       ordered[static_cast<std::size_t>(i+1)].on &&
+                       ordered[static_cast<std::size_t>(i+1)].offset==pos);
+                    if(!replacement){
+                        if (!release(pos,sink)) return false;
+                        triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;
+                    }
                 }
-            } else {
+            } else if(!triggerHeld_) {
                 if (!release(pos,sink)) return false;
                 triggerHeld_=true;triggerPitch_=e.pitch;triggerPhase_=0.;
-            }
+            } else if(e.pitch!=triggerPitch_) {
+                // New chord root while a trigger is held: RETUNE, never seek.
+                // Preserve the original sounding note's remaining gate.
+                const int savedBase=activeBasePitch_,savedVel=activeVelocity_;
+                const int savedDuration=activeDuration_;
+                const double savedStart=activeStart_;
+                if (!release(pos,sink))return false;
+                triggerPitch_=e.pitch;
+                if(savedBase>=0 && block.gatePercent>0 &&
+                   triggerPhase_ < savedStart+savedDuration*block.gatePercent/100.){
+                    const int mapped=harmony::chordPitch(savedBase,block.songRoot,e.pitch,block.scale);
+                    if(!sink(Output{pos,mapped,savedVel,true}))return false;
+                    activePitch_=mapped;activeBasePitch_=savedBase;
+                    activeVelocity_=savedVel;activeDuration_=savedDuration;activeStart_=savedStart;
+                }
+            } // Repeated NoteOn for an already held pitch is harmless.
         }
         if (triggerHeld_ && pos<block.samples) {
-            if (!schedule(pattern,triggerPhase_,pos,block.samples-pos,rate,sink))return false;
+            if (!schedule(pattern,block,triggerPhase_,pos,block.samples-pos,rate,sink))return false;
             advance(block.samples-pos,rate,pattern.lengthSteps);
         }
         return true;
@@ -147,45 +175,63 @@ private:
     template<class Sink> bool release(int offset,Sink& sink) noexcept {
         if (activePitch_<0) { failedOff_=false;return true; }
         if (!sink(Output{offset,activePitch_,0,false})) { failedOff_=true;return false; }
-        activePitch_=-1;activeOffStep_=-1;failedOff_=false;return true;
+        activePitch_=-1;activeBasePitch_=-1;activeDuration_=0;failedOff_=false;return true;
     }
     void advance(int samples,double rate,int length) noexcept {
-        triggerPhase_=std::fmod(triggerPhase_+samples*rate,static_cast<double>(length));
+        triggerPhase_+=samples*rate;
+        // Keep floating-point precision stable even for multi-day MIDI runs.
+        if(triggerPhase_>8.*length){
+            const double shift=std::floor(triggerPhase_/length-4.)*length;
+            triggerPhase_-=shift;
+            if(activePitch_>=0)activeStart_-=shift;
+        }
     }
     template<class Sink>
-    bool schedule(const Pattern& pattern,double start,int offset,int count,double rate,Sink& sink) noexcept {
-        if (count<=0)return true;
-        if (!std::isfinite(start) || std::abs(start)>4.e8) return false;
+    bool releaseDue(const Block& block,double segmentStart,double rate,
+                    int offset,int sampleLimit,Sink& sink) noexcept {
+        if(activePitch_<0)return true;
+        const double end=activeStart_+activeDuration_*block.gatePercent/100.;
+        const int due=std::max(0,static_cast<int>(std::ceil((end-segmentStart)/rate-1.e-8)));
+        if(due<=sampleLimit)return release(offset+due,sink);
+        return true;
+    }
+    template<class Sink>
+    bool schedule(const Pattern& pattern,const Block& block,double start,int offset,
+                  int count,double rate,Sink& sink) noexcept {
+        if(count<=0)return true;
+        if(!std::isfinite(start)||std::abs(start)>4.e8)return false;
         const double end=start+count*rate;
-        // A grid event between samples N-1 and N belongs to sample N.
-        // Include the preceding sub-sample interval to avoid missing it at block boundaries.
         const double firstDouble=std::ceil(start-rate+1.e-9);
-        if (end-firstDouble>maxBoundariesPerBlock) {
+        if(end-firstDouble>maxBoundariesPerBlock){
             (void)release(offset,sink);return false;
         }
         const auto first=static_cast<std::int64_t>(firstDouble);
-        for (int i=0;i<maxBoundariesPerBlock;++i) {
+        for(int i=0;i<maxBoundariesPerBlock;++i){
             const auto grid=first+i;
-            if (static_cast<double>(grid)>=end-1.e-8)break;
-            if (grid<0)continue;
-            const double relative=(static_cast<double>(grid)-start)/rate;
-            const int local=static_cast<int>(std::ceil(relative-1.e-8));
-            if (local<0 || local>=count)continue;
+            if(static_cast<double>(grid)>=end-1.e-8)break;
+            if(grid<0)continue;
+            const int local=static_cast<int>(std::ceil((static_cast<double>(grid)-start)/rate-1.e-8));
+            if(local<0||local>=count)continue;
+            // A fractional NoteOff takes precedence over the next NoteOn.
+            if(!releaseDue(block,start,rate,offset,local,sink))return false;
             const auto& cell=pattern.cells[static_cast<std::size_t>(grid%pattern.lengthSteps)];
-            if (activePitch_>=0 && activeOffStep_==grid%pattern.lengthSteps) {
-                if (!release(offset+local,sink))return false;
-            }
-            if (cell.onPitch>=0) {
-                if (!release(offset+local,sink))return false;
-                if (!sink(Output{offset+local,cell.onPitch,cell.velocity,true}))return false;
-                activePitch_=cell.onPitch;
-                activeOffStep_=static_cast<int>((grid+cell.duration)%pattern.lengthSteps);
+            if(cell.onPitch>=0 && block.gatePercent>0){
+                if(!release(offset+local,sink))return false;
+                const int pitch=mode_==Mode::MidiNote && triggerHeld_?
+                    harmony::chordPitch(cell.onPitch,block.songRoot,triggerPitch_,block.scale):cell.onPitch;
+                if(!sink(Output{offset+local,pitch,cell.velocity,true}))return false;
+                activePitch_=pitch;activeBasePitch_=cell.onPitch;
+                activeVelocity_=cell.velocity;activeDuration_=cell.duration;
+                activeStart_=static_cast<double>(grid);
             }
         }
-        return true;
+        return releaseDue(block,start,rate,offset,count-1,sink);
     }
+
     Mode mode_=Mode::Transport,seenMode_=Mode::Transport;
-    int activePitch_=-1,activeOffStep_=-1,triggerPitch_=-1,seenLength_=0;
+    int activePitch_=-1,activeBasePitch_=-1,activeVelocity_=0,activeDuration_=0;
+    int triggerPitch_=-1,seenLength_=0;
+    double activeStart_=0.;
     bool triggerHeld_=false,haveExpected_=false,failedOff_=false,haveRevision_=false;
     double triggerPhase_=0.,expectedPpq_=0.;
     std::uint64_t seenRevision_=0;

@@ -37,6 +37,9 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseDown(VSTGUI::CPoint& p,const VSTGUI::
  pressed_=hit.target;pressedColumn_=hit.column;
  if(ui::isCommand(hit.target))lastAction_=hit.target;
  invalid();
+ if(hit.target==ui::Target::Gate&&!(buttons&VSTGUI::kControl)){
+  draggingGate_=true;owner_->setGateFromPixel(x);return VSTGUI::kMouseEventHandled;
+ }
  if(hit.target==ui::Target::Variation&&!(buttons&VSTGUI::kControl)){
   dragging_=true;owner_->setVariationFromPixel(x);return VSTGUI::kMouseEventHandled;
  }
@@ -58,6 +61,7 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseDown(VSTGUI::CPoint& p,const VSTGUI::
 VSTGUI::CMouseEventResult EbmPanel::onMouseMoved(VSTGUI::CPoint& p,const VSTGUI::CButtonState& buttons){
  if(!owner_)return VSTGUI::kMouseEventNotHandled;
  const int x=static_cast<int>(p.x-getViewSize().left),y=static_cast<int>(p.y-getViewSize().top);
+ if(draggingGate_){owner_->setGateFromPixel(x);return VSTGUI::kMouseEventHandled;}
  if(dragging_){owner_->setVariationFromPixel(x);return VSTGUI::kMouseEventHandled;}
  if(draggingNumeric_){
   if(!(buttons&VSTGUI::kLButton)){
@@ -70,12 +74,12 @@ VSTGUI::CMouseEventResult EbmPanel::onMouseMoved(VSTGUI::CPoint& p,const VSTGUI:
  owner_->hover(x,y);return VSTGUI::kMouseEventNotHandled;
 }
 VSTGUI::CMouseEventResult EbmPanel::onMouseUp(VSTGUI::CPoint&,const VSTGUI::CButtonState&){
- const bool handled=pressed_!=ui::Target::None||dragging_||draggingNumeric_;
- dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
+ const bool handled=pressed_!=ui::Target::None||dragging_||draggingNumeric_||draggingGate_;
+ draggingGate_=false;dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
  return handled?VSTGUI::kMouseEventHandled:VSTGUI::kMouseEventNotHandled;
 }
 VSTGUI::CMouseEventResult EbmPanel::onMouseCancel(){
- dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
+ draggingGate_=false;dragging_=false;draggingNumeric_=false;pressed_=ui::Target::None;pressedColumn_=-1;invalid();
  return VSTGUI::kMouseEventHandled;
 }
 void EbmPanel::draw(VSTGUI::CDrawContext* dc){
@@ -134,7 +138,7 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
     if(r==0)value=n.locked?"LOCK":"ON";
     if(r==1)value=pitch(n.pitch);
     if(r==2)value=std::to_string(n.velocity);
-    if(r==3)value=std::to_string(n.length);
+    if(r==3)value=edit::lengthText(n.length);
     label(dc,value,x,y+12,49,24,foreground,true);
    }else if(r==0&&n.locked)label(dc,"LOCK",x,y+12,49,24,hot,true);
   }
@@ -147,7 +151,7 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
  fill(dc,20,483,1060,69,well);
  struct Command{int x,w;const char* title;};
  const Command actions[]={{24,180,"GENERATE"},{210,135,"VARIATE"},
-  {351,90,"CLEAR"},{447,110,"COPY BAR"},{563,110,"PASTE BAR"},{679,397,"EXPORT MIDI"}};
+  {351,90,"CLEAR"},{447,110,"COPY BAR"},{563,110,"PASTE BAR"},{856,220,"EXPORT MIDI"}};
  for(const auto& action:actions){
   const auto hit=ui::hit(action.x+action.w/2,517).target;
   const bool down=pressed_==hit, recentlyClicked=lastAction_==hit;
@@ -158,6 +162,10 @@ void EbmPanel::draw(VSTGUI::CDrawContext* dc){
   // host coalesces mouse-down/up repaints in one frame.
   if(recentlyClicked&&!down)fill(dc,action.x+action.w-15,498,8,8,hot,hot);
  }
+ fill(dc,679,492,171,53,pressed_==ui::Target::Gate?accent:card);
+ label(dc,"GLOBAL GATE  "+std::to_string(owner_->gate())+"%",688,497,155,20,foreground);
+ fill(dc,691,528,145,5,quiet);
+ fill(dc,691,528,1+145*owner_->gate()/100,5,accent,hot);
  label(dc,std::string("HELP: ")+owner_->help(),27,555,710,17,faint);
  label(dc,std::string("STATUS: ")+owner_->status(),745,555,330,17,faint,true);
  setDirty(false);

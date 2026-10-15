@@ -13,7 +13,8 @@ void vlq(std::vector<std::uint8_t>& out,std::uint32_t v){
 }
 struct Event {int tick,priority,pitch,velocity;};
 }
-std::vector<std::uint8_t> toMidi(const Phrase& phrase){
+std::vector<std::uint8_t> toMidi(const Phrase& phrase,int gatePercent){
+    if(gatePercent<0||gatePercent>100)throw std::invalid_argument("invalid gate");
     if(phrase.bars<=0||phrase.bars>1024)throw std::invalid_argument("invalid bars");
     std::vector<Event> events;events.reserve(phrase.notes.size()*2);
     int priorEnd=0;
@@ -22,8 +23,12 @@ std::vector<std::uint8_t> toMidi(const Phrase& phrase){
             throw std::invalid_argument("invalid MIDI event");
         if(n.step<priorEnd)throw std::invalid_argument("unsorted/overlapping notes");
         priorEnd=n.step+n.duration;
-        events.push_back({n.step*120,1,n.pitch,n.velocity});
-        events.push_back({priorEnd*120,0,n.pitch,0});
+        if(gatePercent>0){
+            const int begin=n.step*120;
+            const int gateTicks=std::max(1,(n.duration*120*gatePercent+50)/100);
+            events.push_back({begin,1,n.pitch,n.velocity});
+            events.push_back({begin+gateTicks,0,n.pitch,0});
+        }
     }
     std::sort(events.begin(),events.end(),[](const Event& a,const Event& b){
         if(a.tick!=b.tick) return a.tick<b.tick;
