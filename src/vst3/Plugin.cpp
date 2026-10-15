@@ -381,9 +381,30 @@ void Controller::setVariationValue(int value){
  }catch(...){status_="INVALID VARIATION";redraw();}
 }
 void Controller::dragNumeric(int index,int row,int base,int upwardPixels){
- if(index<0||index>=editable_.bars*16||(row!=2&&row!=3))return;
+ if(index<0||index>=editable_.bars*16||(row!=1&&row!=2&&row!=3))return;
  const auto& source=editable_.steps[static_cast<std::size_t>(index)];
  if(!source.on||source.locked)return;
+ if(row==1){
+  // Move through SCALE degrees, not chromatic semitones. The drag origin
+  // remains fixed so upward/downward movement is reversible.
+  const int root=session_.options().rootMidi;
+  const int low=std::max(0,root-12),high=std::min(127,root+12);
+  const int targetDegree=upwardPixels/8;
+  int targetPitch=startingValue;
+  for(int i=0;i<std::abs(targetDegree);++i){
+   const int direction=targetDegree>0?1:-1;
+   int next=targetPitch+direction;
+   while(next>=low&&next<=high&&!edit::inScale(next,root,editable_.scale))next+=direction;
+   if(next<low||next>high)break;
+   targetPitch=next;
+  }
+  if(targetPitch==source.pitch)return;
+  auto p=editable_;
+  if(edit::modify(p,index,targetPitch,source.velocity,source.length)&&commitEdit(std::move(p))){
+   status_="PITCH DRAGGED";redraw();
+  }
+  return;
+ }
  const ui::Target target=row==2?ui::Target::Velocity:ui::Target::Length;
  const int maxValue=row==3?edit::maximumLength(editable_,index):127;
  const int value=ui::dragValue(target,base,upwardPixels,maxValue);
@@ -420,11 +441,16 @@ void Controller::choice(int x,int y,int kind){
  }else if(kind==5){
   const int index=bar_*16+editIndex_;
   const auto root=session_.options().rootMidi;
-  for(int midi=24;midi<=84;++midi){
+  const int selected=editable_.steps[static_cast<std::size_t>(index)].pitch;
+  const int low=std::max(0,root-12),high=std::min(127,root+12);
+  for(int midi=low;midi<=high;++midi){
    if(!edit::inScale(midi,root,editable_.scale))continue;
    add(std::string(notes[midi%12])+std::to_string(edit::studioOneOctave(midi)),midi,
        editable_.steps[static_cast<std::size_t>(index)].pitch==midi);
   }
+  // Never make an existing out-of-range note impossible to inspect/select.
+  if((selected<low||selected>high)&&edit::inScale(selected,root,editable_.scale))
+   add(std::string(notes[selected%12])+std::to_string(edit::studioOneOctave(selected))+" (CURRENT)",selected,true);
  }
  VSTGUI::CPoint point{static_cast<VSTGUI::CCoord>(x),static_cast<VSTGUI::CCoord>(y)};
  panel_->localToFrame(point);
@@ -528,7 +554,7 @@ void Controller::hover(int x,int y){
  const char* next="CLICK TO EDIT | CTRL+CLICK: RESET";
  switch(ui::hit(x,y).target){
  case Target::NoteOn:next="NOTE ON: click toggle | SHIFT+click LOCK | CTRL+click reset";break;
- case Target::Pitch:next="PITCH: double-click choose scale note | CTRL+click root";break;
+ case Target::Pitch:next="PITCH: drag scale notes | double-click menu | CTRL+click root";break;
  case Target::Velocity:next="VELOCITY: drag / wheel +/-1 / double-click 1-127 | CTRL=100";break;
  case Target::Length:next="LENGTH: 1=1/16 | drag / wheel +/-1 / double-click | CTRL=1";break;
  case Target::Gate:next="GATE: drag / wheel +/-1 / double-click 0-100 | CTRL = 100%";break;
