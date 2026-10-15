@@ -64,7 +64,7 @@ constexpr int dragValue(Target target,int base,int upwardPixels,int maxLength=12
 constexpr int pitchMin(int root) noexcept {return std::max(0,root-12);}
 constexpr int pitchMax(int root) noexcept {return std::min(127,root+12);}
 inline int pitchDrag(int start,int root,edit::Scale scale,int upwardPixels) noexcept {
- const int moves=upwardPixels/8, direction=moves>0?1:-1;
+ const int moves=std::clamp(upwardPixels/8,-24,24),direction=moves>0?1:-1;
  int note=start;
  for(int i=0;i<std::abs(moves);++i){
   int next=note+direction;
