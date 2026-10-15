@@ -141,8 +141,11 @@ public:
                        ordered[static_cast<std::size_t>(i+1)].on &&
                        ordered[static_cast<std::size_t>(i+1)].offset==pos);
                     if(!replacement){
-                        if (!release(pos,sink)) return false;
+                        // Input NoteOff owns the stop even when the output bus
+                        // temporarily rejects its corresponding bass NoteOff.
+                        // The pending output NoteOff is retried next callback.
                         triggerHeld_=false;triggerPitch_=-1;triggerPhase_=0.;
+                        if (!release(pos,sink)) return false;
                     }
                 }
             } else if(!triggerHeld_) {
