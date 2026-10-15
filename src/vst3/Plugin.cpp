@@ -388,7 +388,7 @@ void Controller::dragNumeric(int index,int row,int base,int upwardPixels){
   // Move through SCALE degrees, not chromatic semitones. The drag origin
   // remains fixed so upward/downward movement is reversible.
   const int root=session_.options().rootMidi;
-  const int targetPitch=ui::pitchDrag(startingValue,root,editable_.scale,upwardPixels);
+  const int targetPitch=ui::pitchDrag(base,root,editable_.scale,upwardPixels);
   if(targetPitch==source.pitch)return;
   auto p=editable_;
   if(edit::modify(p,index,targetPitch,source.velocity,source.length)&&commitEdit(std::move(p))){
