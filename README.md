@@ -1,11 +1,6 @@
-> Current MIDI NOTE phase follow-up: [repair semantics, regressions and new RC](docs/MIDI-PHASE-RC-2026-10-15.md).
-> The earlier RC/build below is preserved; separated Off/On phase continuity is superseded by this follow-up.
-
 # 125A EBM Bassline Generator
 
-**Current development: v0.2 Windows x64 MIDI-only VST3 release candidate on
-`fix/p1-codex-qa-2026-10-15`. NOT FINAL; owner Studio One 8.1.2 and local
-125A Plugin Tester acceptance are required for this new binary.**
+**125A EBM Bassline Generator V1.0.0 — Windows x64 MIDI-only VST3.**\n\nRelease source: `release/v1.0.0-windows`. The owner has broadly accepted the practical Studio One behavior. The predecessor automated Windows QA passed; see [CURRENT.md](CURRENT.md) for exact verified provenance and remaining release gates. A separately compiled version-labelled V1 binary is required.
 
 Current implementation, all 15 repair findings, compatibility and measured QA:
 [`docs/FINAL-QA-CODEX-RC-2026-10-15.md`](docs/FINAL-QA-CODEX-RC-2026-10-15.md).
@@ -20,7 +15,7 @@ and validates the exact staged bundle. Do not run 125A Plugin Tester in Actions.
 Current editor: STYLE, BARS 1/2/4/8, ROOT, ten SCALES and trigger guide, VARIATION,
 SONG START, MIDI NOTE/TRANSPORT, editable NOTE/LOCK/PITCH/VELOCITY/LENGTH,
 GLOBAL GATE, copy/paste/clear, MIDI export, playhead, 100/150% zoom.
-Velocity, Length, Variation and Gate support wheel ±1; the latter four numerical
+Velocity, Length, Variation and Gate support wheel ±1; Pitch supports scale-aware mouse dragging within one octave above/below ROOT; the latter four numerical
 values support double-click integer entry. Ctrl-click restores defined defaults.
 Gate uses its existing integer 0–100% domain, now correctly advertised as 100
 VST3 steps; parameter IDs, normalized range and EBM1/2/3 document bytes remain stable.
