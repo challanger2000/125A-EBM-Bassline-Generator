@@ -1,3 +1,5 @@
+> **2026-10-18 — Audit accountability:** Prior ChatGPT audit conclusions were overstated. Seven findings F1–F7 were reported independently; corrective code is proposed but acceptance is not yet verified. See [CHATGPT-AUDIT-FAILURES-2026-10-18.md](CHATGPT-AUDIT-FAILURES-2026-10-18.md). Do not treat prior PASS reports as evidence for these uncovered cases.
+
 > Current MIDI NOTE phase follow-up: [repair and verified Windows candidate](MIDI-PHASE-RC-2026-10-15.md).
 > Earlier build evidence below remains historical; it does not certify separated trigger Off/On continuity.
 
