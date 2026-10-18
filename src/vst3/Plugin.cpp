@@ -2,6 +2,7 @@
 #include "EbmPanel.hpp"
 #include "EbmBrand.hpp"
 #include "UiGeometry.hpp"
+#include "BarCommand.hpp"
 #include "ebm/MidiWriter.hpp"
 #include "ebm/Automation.hpp"
 #include "vstgui/lib/cfileselector.h"
@@ -470,10 +471,7 @@ void Controller::choice(int x,int y,int kind){
       edit::conformToScale(fresh,next.options().rootMidi);
       pat=std::move(fresh);
      }else if(kind==1){
-      const int engineBars=value<=4?4:8;
-      if(next.options().bars!=engineBars)next.setBars(engineBars);
-      if(!next.hasCurrent())(void)next.generate();
-      pat.bars=value;
+      applyBars(next,pat,value);
      }else if(kind==2){
       if(!edit::transpose(pat,value-next.options().rootMidi))throw std::out_of_range("ROOT OUT OF MIDI RANGE");
       else next.setRootMidi(value);
@@ -619,9 +617,7 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
    edit::conformToScale(pat,next.options().rootMidi);
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,0);break;
  case Target::Bars:if(ctrl){auto next=session_;auto pat=editable_;
-    if(next.options().bars!=8)next.setBars(8);
-    if(!next.hasCurrent())(void)next.generate();
-    pat.bars=8;(void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,1);break;
+    applyBars(next,pat,8);(void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,1);break;
  case Target::Root:if(ctrl){auto next=session_;auto pat=editable_;
    if(!edit::transpose(pat,48-next.options().rootMidi)){status_="ROOT RESET OUT OF MIDI RANGE";redraw();break;}
    next.setRootMidi(48);(void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,2);break;
