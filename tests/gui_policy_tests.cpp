@@ -112,7 +112,7 @@ int main(){
  CHECK(barsSession.options().bars==4);
  ebm::vst3::applyBars(barsSession,barsPattern,8);
  CHECK(barsSession.options().bars==8 && barsPattern.bars==8);
- for(const auto style:{Style::Minimal,Style::Dark,Style::ClassicEBM}){
+ for(const auto style:{Style::MinimalBody,Style::DarkElectro,Style::ClassicEBM}){
   barsSession.setStyle(style);(void)barsSession.generate();
   auto generated=edit::fromPhrase(v2::render(barsSession.current()),8);
   if(style==Style::ClassicEBM)
