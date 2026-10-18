@@ -106,9 +106,17 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         block.tempoValid=(context->state&ProcessContext::kTempoValid)!=0;
         block.ppqValid=(context->state&ProcessContext::kProjectTimeMusicValid)!=0;
         block.playing=(context->state&ProcessContext::kPlaying)!=0;
-        if(block.tempoValid)block.tempo=context->tempo;
+        if(block.tempoValid && std::isfinite(context->tempo) && context->tempo>0. && context->tempo<=1000.){
+            block.tempo=context->tempo;
+            lastValidTempo_=context->tempo;
+        }else{
+            block.tempoValid=false;
+        }
         if(block.ppqValid)block.projectPpq=context->projectTimeMusic;
     }
+    // MIDI-note triggering may continue while the DAW has no tempo flag.
+    // Transport triggering still requires an explicitly valid host tempo.
+    if(!block.tempoValid)block.tempo=lastValidTempo_;
     live::Trigger triggers[live::Runtime::maxTriggers]{};
     int count=0;
     if(data.inputEvents){
