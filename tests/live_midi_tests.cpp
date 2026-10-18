@@ -132,6 +132,42 @@ int main(){
     CHECK(live.process(p,liveBlock,nullptr,0,edits));
     CHECK(live.triggerHeld() && edits.count==before);
     CHECK(live.activePitch()==36); // edit does not cut the held note
+    // Regression: simultaneous chord notes must cause a single retune at the offset.
+    Runtime chords;chords.setMode(Mode::MidiNote);
+    Sink chordSink;
+    Block cb;cb.samples=120;cb.sampleRate=1000.;cb.tempo=120.;cb.revision=1;cb.songRoot=48;
+    const Trigger chordStart{0,48,true};
+    CHECK(chords.process(p,cb,&chordStart,1,chordSink));
+    const int beforeChord=chordSink.count;
+    const Trigger change[]={{10,48,false},{10,52,true},{10,55,true}};
+    cb.samples=60;chordSink.origin=120;
+    CHECK(chords.process(p,cb,change,3,chordSink));
+    CHECK(chords.triggerHeld());
+    int sameSampleOns=0;
+    for(int i=beforeChord;i<chordSink.count;++i)
+        if(chordSink.data[static_cast<std::size_t>(i)].sample==130 &&
+           chordSink.data[static_cast<std::size_t>(i)].on)++sameSampleOns;
+    CHECK(sameSampleOns<=1);
+    // Last-note priority across blocks: release G -> E; release E -> no held notes.
+    const Trigger releaseG{0,55,false};
+    chordSink.origin=180;cb.samples=20;
+    CHECK(chords.process(p,cb,&releaseG,1,chordSink));
+    CHECK(chords.triggerHeld());
+    const Trigger releaseE{0,52,false};
+    chordSink.origin=200;
+    CHECK(chords.process(p,cb,&releaseE,1,chordSink));
+    CHECK(!chords.triggerHeld());
+    // A lower held key must resume when the upper key is released.
+    Runtime legato;legato.setMode(Mode::MidiNote);Sink legatoSink;
+    const Trigger twoNotes[]={{0,48,true},{8,52,true}};
+    cb.samples=20;
+    CHECK(legato.process(p,cb,twoNotes,2,legatoSink));
+    const Trigger offUpper{0,52,false};
+    CHECK(legato.process(p,cb,&offUpper,1,legatoSink));
+    CHECK(legato.triggerHeld());
+    const Trigger offLower{0,48,false};
+    CHECK(legato.process(p,cb,&offLower,1,legatoSink));
+    CHECK(!legato.triggerHeld());
     // Simulated output bus rejection: retry NoteOff and only then move onward.
     Runtime backpressure;
     Sink reject;

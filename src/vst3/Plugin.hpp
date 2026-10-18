@@ -36,6 +36,7 @@ private:
  host::Model model_{};
  std::atomic<bool> cleanupPending_{false};
  double sampleRate_=44100.;
+ double lastValidTempo_=120.;
  int reportedStep_=-1;
 };
 class EbmPanel;

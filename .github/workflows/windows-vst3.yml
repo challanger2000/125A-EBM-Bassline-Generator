@@ -1,13 +1,15 @@
-name: EBM Experimental Windows VST3
+name: 125A EBM V1 Windows VST3
 on:
   push:
     branches:
       - research/v0.2.0-musical-foundation
       - fix/p1-codex-qa-2026-10-15
+      - fix/claude-f1-f7-2026-10-18
     paths:
       - 'src/**'
       - 'include/**'
       - 'tests/**'
+      - 'tools/**'
       - 'resource/**'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-vst3.yml'
@@ -121,18 +123,18 @@ jobs:
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
             "$hash  $([IO.Path]::GetRelativePath($root, $_.FullName))" | Add-Content -Path stage/SHA256SUMS.txt
           }
-      - name: Archive experimental GUI plugin (NOT FINAL)
+      - name: Archive 125A EBM v1.0.1 Windows x64 VST3
         uses: actions/upload-artifact@v4
         with:
-          name: 125A-EBM-v0.2-MIDI-PHASE-RC-Windows-x64
+          name: 125A-EBM-V1-v1.0.1-Windows-x64-VST3
           path: stage/
           if-no-files-found: error
       - name: Publish precise QA job summary
         if: always()
         shell: pwsh
         run: |
-          '## v0.2 development RC — NOT FINAL' | Add-Content $env:GITHUB_STEP_SUMMARY
-          'Studio One 8.1.2 and owner-local 125A Tester acceptance remain NOT VERIFIED for this new binary.' | Add-Content $env:GITHUB_STEP_SUMMARY
+          '## 125A EBM Bassline Generator v1.0.1 — Windows build QA' | Add-Content $env:GITHUB_STEP_SUMMARY
+          'Automated Windows QA only. Studio One and owner-local 125A Tester are outside this runner.' | Add-Content $env:GITHUB_STEP_SUMMARY
           foreach ($log in @('ctest','native-host','validator','expected-negative-control')) {
             $path = "qa-logs/$log.txt"
             if (Test-Path $path) {

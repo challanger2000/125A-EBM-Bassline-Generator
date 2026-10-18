@@ -2,6 +2,7 @@
 #include "EbmPanel.hpp"
 #include "EbmBrand.hpp"
 #include "UiGeometry.hpp"
+#include "BarCommand.hpp"
 #include "ebm/MidiWriter.hpp"
 #include "ebm/Automation.hpp"
 #include "vstgui/lib/cfileselector.h"
@@ -106,14 +107,22 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
         block.tempoValid=(context->state&ProcessContext::kTempoValid)!=0;
         block.ppqValid=(context->state&ProcessContext::kProjectTimeMusicValid)!=0;
         block.playing=(context->state&ProcessContext::kPlaying)!=0;
-        if(block.tempoValid)block.tempo=context->tempo;
+        if(block.tempoValid && std::isfinite(context->tempo) && context->tempo>0. && context->tempo<=1000.){
+            block.tempo=context->tempo;
+            lastValidTempo_=context->tempo;
+        }else{
+            block.tempoValid=false;
+        }
         if(block.ppqValid)block.projectPpq=context->projectTimeMusic;
     }
+    // MIDI-note triggering may continue while the DAW has no tempo flag.
+    // Transport triggering still requires an explicitly valid host tempo.
+    if(!block.tempoValid)block.tempo=lastValidTempo_;
     live::Trigger triggers[live::Runtime::maxTriggers]{};
     int count=0;
     if(data.inputEvents){
         const int32 total=data.inputEvents->getEventCount();
-        if(total<0||total>live::Runtime::maxTriggers)inputOverflow=true;
+        if(total<0)inputOverflow=true;
         for(int32 i=0;!inputOverflow&&i<total;++i){
             Steinberg::Vst::Event ev{};
             if(data.inputEvents->getEvent(i,ev)!=kResultOk){inputOverflow=true;break;}
@@ -127,6 +136,7 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
                 inputOverflow=true; // Malformed input also requires safe voice cleanup.
                 break;
             }
+            if(count>=live::Runtime::maxTriggers){inputOverflow=true;break;}
             triggers[count++]={ev.sampleOffset,pitch,on};
         }
     }
@@ -461,10 +471,7 @@ void Controller::choice(int x,int y,int kind){
       edit::conformToScale(fresh,next.options().rootMidi);
       pat=std::move(fresh);
      }else if(kind==1){
-      const int engineBars=value<=4?4:8;
-      if(next.options().bars!=engineBars)next.setBars(engineBars);
-      if(!next.hasCurrent())(void)next.generate();
-      pat.bars=value;
+      applyBars(next,pat,value);
      }else if(kind==2){
       if(!edit::transpose(pat,value-next.options().rootMidi))throw std::out_of_range("ROOT OUT OF MIDI RANGE");
       else next.setRootMidi(value);
@@ -609,7 +616,8 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
     edit::preserveLocks(editable_,pat);
    edit::conformToScale(pat,next.options().rootMidi);
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,0);break;
- case Target::Bars:if(ctrl){auto next=editable_;next.bars=8;(void)commitEdit(next);}else choice(x,y,1);break;
+ case Target::Bars:if(ctrl){auto next=session_;auto pat=editable_;
+    applyBars(next,pat,8);(void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,1);break;
  case Target::Root:if(ctrl){auto next=session_;auto pat=editable_;
    if(!edit::transpose(pat,48-next.options().rootMidi)){status_="ROOT RESET OUT OF MIDI RANGE";redraw();break;}
    next.setRootMidi(48);(void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,2);break;
@@ -719,7 +727,7 @@ using namespace ebm::vst3;
 BEGIN_FACTORY_DEF("125A Systems","https://github.com/challanger2000/125A-EBM-Bassline-Generator","")
 DEF_CLASS2(INLINE_UID_FROM_FUID(ProcessorUID),PClassInfo::kManyInstances,kVstAudioEffectClass,
  "125A EBM Bassline Generator",Vst::kDistributable,Vst::PlugType::kInstrumentSynth,
- "0.2.0",kVstVersionString,Processor::createInstance)
+ "1.0.1",kVstVersionString,Processor::createInstance)
 DEF_CLASS2(INLINE_UID_FROM_FUID(ControllerUID),PClassInfo::kManyInstances,kVstComponentControllerClass,
- "125A EBM Bassline Generator Controller",0,"","0.2.0",kVstVersionString,Controller::createInstance)
+ "125A EBM Bassline Generator Controller",0,"","1.0.1",kVstVersionString,Controller::createInstance)
 END_FACTORY

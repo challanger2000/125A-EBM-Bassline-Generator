@@ -76,7 +76,14 @@ int main(int argc,char** argv){
   rt.reset();block.samples=64;block.sampleRate=48000.;live::Trigger roots[64]{};
   for(int i=0;i<64;++i)roots[i]={i,48+i%12,true};
   CHECK(rt.process(prepared,block,roots,64,sink));const live::Trigger off{0,51,false};
-  CHECK(rt.process(prepared,block,&off,1,sink));CHECK(!rt.triggerHeld()&&balance==0);
+  CHECK(rt.process(prepared,block,&off,1,sink));
+  // Last-note priority keeps other pressed pitches: release all distinct remaining notes.
+  CHECK(rt.triggerHeld());
+  live::Trigger remaining[11]{};int remainingCount=0;
+  for(int pitch=48;pitch<60;++pitch)if(pitch!=51)
+      remaining[remainingCount++]={0,pitch,false};
+  CHECK(rt.process(prepared,block,remaining,remainingCount,sink));
+  CHECK(!rt.triggerHeld()&&balance==0);
  }
  host::AutomationPlan plan;CHECK(plan.add(31,true,0.,64));CHECK(plan.add(0,false,1.,64));CHECK(plan.add(31,true,1.,64));plan.sort();
  CHECK(plan.points[0].offset==0&&plan.points[1].value==0.&&plan.points[2].value==1.);

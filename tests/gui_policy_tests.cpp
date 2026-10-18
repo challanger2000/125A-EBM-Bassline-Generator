@@ -1,4 +1,5 @@
 #include "../src/vst3/UiGeometry.hpp"
+#include "../src/vst3/BarCommand.hpp"
 #include "ebm/HostBridge.hpp"
 #include "ebm/MidiWriter.hpp"
 #include "ebm/ScaleNoteDisplay.hpp"
@@ -103,6 +104,23 @@ int main(){
  auto exported=toMidi(edit::toPhrase(pat));CHECK(exported.size()>32);
  CHECK(exported[0]=='M'&&exported[1]=='T');
  CHECK(edit::toPhrase(pat).bars==1);
+ // F5: Ctrl+BARS and menu use the same policy; engine must extend to 8 bars.
+ v2::Session barsSession;
+ barsSession.setBars(4);
+ (void)barsSession.generate();
+ auto barsPattern=edit::fromPhrase(v2::render(barsSession.current()),4);
+ CHECK(barsSession.options().bars==4);
+ ebm::vst3::applyBars(barsSession,barsPattern,8);
+ CHECK(barsSession.options().bars==8 && barsPattern.bars==8);
+ for(const auto style:{Style::MinimalBody,Style::DarkElectro,Style::ClassicEBM}){
+  barsSession.setStyle(style);(void)barsSession.generate();
+  auto generated=edit::fromPhrase(v2::render(barsSession.current()),8);
+  if(style==Style::ClassicEBM)
+   (void)edit::generateClassicDrive(generated,barsSession.options().rootMidi,barsSession.current().settings.seed);
+  bool late=false;
+  for(int i=64;i<128;++i)if(generated.steps[static_cast<std::size_t>(i)].on)late=true;
+  CHECK(late);
+ }
  auto state=s.snapshot();v2::Session replay;replay.restore(state);
  CHECK(v2::render(s.current()).notes==v2::render(replay.current()).notes);
  std::cout<<"GUI controls + full 16x4 hit mapping PASS\n";

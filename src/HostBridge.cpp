@@ -144,7 +144,13 @@ bool PatternExchange::publish(const PreparedState& source) noexcept {
         int expected=Free;
         if(!slots_[static_cast<std::size_t>(i)].status.compare_exchange_strong(
             expected,Writing,std::memory_order_acq_rel))continue;
-        slots_[static_cast<std::size_t>(i)].data=source;
+        // A queued state restore must not lose its reset when superseded by an edit.
+        // The writer mutex serializes all publishers and the pending slot is not read by audio.
+        const int prior=pending_.load(std::memory_order_acquire);
+        PreparedState merged=source;
+        if(prior>=0)merged.resetOnAdopt=merged.resetOnAdopt ||
+            slots_[static_cast<std::size_t>(prior)].data.resetOnAdopt;
+        slots_[static_cast<std::size_t>(i)].data=merged;
         slots_[static_cast<std::size_t>(i)].status.store(Ready,std::memory_order_release);
         const int discarded=pending_.exchange(i,std::memory_order_acq_rel);
         if(discarded>=0){
