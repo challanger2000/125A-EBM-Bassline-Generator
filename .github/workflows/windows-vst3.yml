@@ -8,6 +8,7 @@ on:
       - 'src/**'
       - 'include/**'
       - 'tests/**'
+      - 'tools/**'
       - 'resource/**'
       - 'CMakeLists.txt'
       - '.github/workflows/windows-vst3.yml'
