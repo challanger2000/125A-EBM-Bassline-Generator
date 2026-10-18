@@ -4,6 +4,7 @@ on:
     branches:
       - research/v0.2.0-musical-foundation
       - fix/p1-codex-qa-2026-10-15
+      - fix/claude-f1-f7-2026-10-18
     paths:
       - 'src/**'
       - 'include/**'
