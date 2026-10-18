@@ -727,7 +727,7 @@ using namespace ebm::vst3;
 BEGIN_FACTORY_DEF("125A Systems","https://github.com/challanger2000/125A-EBM-Bassline-Generator","")
 DEF_CLASS2(INLINE_UID_FROM_FUID(ProcessorUID),PClassInfo::kManyInstances,kVstAudioEffectClass,
  "125A EBM Bassline Generator",Vst::kDistributable,Vst::PlugType::kInstrumentSynth,
- "0.2.0",kVstVersionString,Processor::createInstance)
+ "1.0.1",kVstVersionString,Processor::createInstance)
 DEF_CLASS2(INLINE_UID_FROM_FUID(ControllerUID),PClassInfo::kManyInstances,kVstComponentControllerClass,
- "125A EBM Bassline Generator Controller",0,"","0.2.0",kVstVersionString,Controller::createInstance)
+ "125A EBM Bassline Generator Controller",0,"","1.0.1",kVstVersionString,Controller::createInstance)
 END_FACTORY
