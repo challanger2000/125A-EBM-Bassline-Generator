@@ -113,7 +113,7 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
     int count=0;
     if(data.inputEvents){
         const int32 total=data.inputEvents->getEventCount();
-        if(total<0||total>live::Runtime::maxTriggers)inputOverflow=true;
+        if(total<0)inputOverflow=true;
         for(int32 i=0;!inputOverflow&&i<total;++i){
             Steinberg::Vst::Event ev{};
             if(data.inputEvents->getEvent(i,ev)!=kResultOk){inputOverflow=true;break;}
@@ -127,6 +127,7 @@ tresult PLUGIN_API Processor::process(ProcessData& data){
                 inputOverflow=true; // Malformed input also requires safe voice cleanup.
                 break;
             }
+            if(count>=live::Runtime::maxTriggers){inputOverflow=true;break;}
             triggers[count++]={ev.sampleOffset,pitch,on};
         }
     }
@@ -609,7 +610,10 @@ void Controller::click(int x,int y,bool ctrl,bool shift,bool doubleClick){
     edit::preserveLocks(editable_,pat);
    edit::conformToScale(pat,next.options().rootMidi);
    (void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,0);break;
- case Target::Bars:if(ctrl){auto next=editable_;next.bars=8;(void)commitEdit(next);}else choice(x,y,1);break;
+ case Target::Bars:if(ctrl){auto next=session_;auto pat=editable_;
+    if(next.options().bars!=8)next.setBars(8);
+    if(!next.hasCurrent())(void)next.generate();
+    pat.bars=8;(void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,1);break;
  case Target::Root:if(ctrl){auto next=session_;auto pat=editable_;
    if(!edit::transpose(pat,48-next.options().rootMidi)){status_="ROOT RESET OUT OF MIDI RANGE";redraw();break;}
    next.setRootMidi(48);(void)transact(std::move(next),mode_,std::move(pat));}else choice(x,y,2);break;
