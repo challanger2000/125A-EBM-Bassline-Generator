@@ -73,6 +73,30 @@ int main(){
     selected=exchange.acquire(revision);
     REQUIRE(selected && revision==2 && selected->pattern.cells[0].onPitch==36 && selected->root==36 && selected->songStart==2 && selected->scale==ebm::edit::Scale::Major);
 
+    // F4: a reset awaiting audio adoption survives a newer pattern-only publish.
+    {
+        host::PatternExchange pendingReset;
+        auto restored=frame1;
+        restored.resetOnAdopt=true;
+        auto edited=frame2;
+        edited.resetOnAdopt=false;
+        REQUIRE(pendingReset.publish(restored));
+        REQUIRE(pendingReset.publish(edited));
+        std::uint64_t resetRevision=0;
+        const auto* adopted=pendingReset.acquire(resetRevision);
+        REQUIRE(adopted && adopted->resetOnAdopt && adopted->root==40);
+        // Once adopted, a subsequent ordinary edit must not reassert reset.
+        REQUIRE(pendingReset.publish(edited));
+        adopted=pendingReset.acquire(resetRevision);
+        REQUIRE(adopted && !adopted->resetOnAdopt);
+        host::PatternExchange ordinary;
+        REQUIRE(ordinary.publish(frame1));
+        REQUIRE(ordinary.publish(edited));
+        std::uint64_t ordinaryRevision=0;
+        REQUIRE(ordinary.acquire(ordinaryRevision) &&
+                !ordinary.acquire(ordinaryRevision)->resetOnAdopt);
+    }
+
     // Simulate non-realtime publication while the audio side continuously
     // adopts snapshots. No partial/cross-wired patterns are permitted.
     {
