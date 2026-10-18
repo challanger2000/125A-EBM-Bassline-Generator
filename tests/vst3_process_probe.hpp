@@ -60,6 +60,24 @@ inline int processChecks(Steinberg::Vst::IComponent* component,const host::Docum
    for(int block=0;block<32;++block)PROBE(audio->process(data)==kResultOk);
    PROBE(output.getEventCount()==0);
   }
+  // F1: unrelated MIDI events must not consume the 64-note trigger budget.
+  PROBE(restore());input.clear();output.clear();
+  for(int n=0;n<80;++n){
+   Event unrelated{};unrelated.type=Event::kPolyPressureEvent;
+   unrelated.sampleOffset=n;
+   unrelated.polyPressure.pitch=48;
+   unrelated.polyPressure.pressure=.5f;
+   PROBE(input.addEvent(unrelated)==kResultOk);
+  }
+  PROBE(note(48,100,true));
+  PROBE(audio->process(data)==kResultOk);
+  PROBE(output.getEventCount()==1);
+  PROBE(output.getEventByIndex(0)->type==Event::kNoteOnEvent &&
+        output.getEventByIndex(0)->sampleOffset==100);
+  input.clear();output.clear();PROBE(note(48,0,false));
+  PROBE(audio->process(data)==kResultOk);
+  PROBE(output.getEventCount()==1 &&
+        output.getEventByIndex(0)->type==Event::kNoteOffEvent);
   // Matching trigger NoteOff with limited output capacity must permanently stop.
   PROBE(restore());input.clear();output.clear();PROBE(note(48,0,true));PROBE(audio->process(data)==kResultOk);
   input.clear();output.clear();PROBE(note(48,100,false));output.rejectOffs=1;
